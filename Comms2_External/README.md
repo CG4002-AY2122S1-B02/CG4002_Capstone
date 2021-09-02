@@ -1,15 +1,14 @@
 # External Comms
 
 ## Instruction
-- Secret Key is currently set as cg40024002group2
 - `eval_client.py` runs on Ultra96 and sends data to evaluation server
 
 ## Access Ultra96
-1. You need to ssh into sunfire (can use SOC account):
+1. You need to SSH into sunfire
 ```
-ssh -l nusnet_id sunfire.comp.nus.edu.sg 
+ssh -l <nusnet_id>@sunfire.comp.nus.edu.sg 
 ```
-2. From Sunfire, you can access the board:
+2. From Sunfire, you can access the board
 ```
 ssh -l xilinx <IP address of your group's board>
 2 makerslab-fpga-02 137.132.86.225
@@ -19,7 +18,7 @@ ssh -l xilinx <IP address of your group's board>
 - Access Ultra96 via SSH
 ```
 ssh e0325893@sunfire.comp.nus.edu.sg
-ssh -l xilinx 137.132.86.225
+ssh -l xilinx@137.132.86.225
 ```
 - Transfer files to Ultra96 via SSH
 ```

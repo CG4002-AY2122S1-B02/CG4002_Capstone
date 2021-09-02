@@ -43,9 +43,8 @@ def main():
 
     count = 0
     while action != "logout":
-        # Send the Evaluation Server the received data from the 3 laptops
+        # Send the Database Server the received data from the 3 laptops
         my_client.send_data("# 1 2 3 | dab | 1.00")
-        # Receive the new dance move instructions from the Evaluation Server
         time.sleep(2)
         count += 1
         if (count == 30):
