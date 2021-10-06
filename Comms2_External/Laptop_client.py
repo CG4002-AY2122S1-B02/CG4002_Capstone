@@ -25,24 +25,31 @@ TUNNEL_TWO_SSH_PASSWORD = "cg4002b02"
 
 # Initialise Socket Information
 IP_ADDR = '127.0.0.1'
-PORT_NUM = [8001,8002,8003]
+# For local testing
+PORT_NUM = 8000
+# For actual production
+PORT_NUMS = [8001,8002,8003]
 GROUP_ID = 2
 SECRET_KEY = 'cg40024002group2'
 
 # Initialise Global Variables
 BLOCK_SIZE = 16
 PADDING = ' '
-FORMAT = 'utf8'
+FORMAT = "utf8"
 
 class Client():
-    def __init__(self, ip_addr, port_num, group_id, secret_key):
+    def __init__(self, dancer_id, ip_addr, port_num, group_id, secret_key):
         super(Client, self).__init__()
 
-        # Create a TCP/IP socket and connect to database server
+        # Create a TCP/IP socket and connect to Ultra96 Server
+        self.dancer_id = dancer_id
         self.port_num = port_num
         self.ip_addr = ip_addr
         self.group_id = group_id
         self.secret_key = secret_key
+
+        self.start_time_sync = True
+        self.start_evaluation = False
 
     '''
     Create a "Double-Hop" SSH Tunnel for Dancer's Laptops to Reach Ultra96 Server
@@ -65,52 +72,144 @@ class Client():
         # Create Tunnel Two from Sunfire Server to Ultra96 Server
         tunnel_two = sshtunnel.open_tunnel(
             ssh_address_or_host=('127.0.0.1',tunnel_one.local_bind_port),
-            remote_bind_address=('127.0.0.1',self.port_num), # Local bind port
+            remote_bind_address=('127.0.0.1',PORT_NUM), # Local bind port for Sunfire (8000)
             ssh_username=TUNNEL_TWO_SSH_USERNAME,
             ssh_password=TUNNEL_TWO_SSH_PASSWORD,
-            local_bind_address=('127.0.0.1',self.port_num) # Local bind port
+            local_bind_address=('127.0.0.1',self.port_num) # Local bind port on Laptop [8001,8002,8003]
         )
         tunnel_two.start()
-        print('Connection to tunnel_two (137.132.86.225:8001) OK...')
+        print('Connection to tunnel_two (137.132.86.225:8000) OK...')
 
+    '''
+    Body methods to ensure proper synchronization and procedure
+    '''
+    def wait_for_start(self):
+        # Wait for start command to be sent from Ultra96 Server
+        while not self.start_evaluation:
+            try:
+                data = self.socket.recv(1024)
+                start_flag = self.decrypt_message(data)
+                if 'S' in start_flag:
+                    print('Start flag received!')
+                    self.start_evaluation = True
+            except socket.timeout:
+                print('Still waiting for one of the dancers T.T !!!')
+    
     def run(self):
-        self.start_ssh_tunnel()
-        server_address = (self.ip_addr, self.port_num)
+        #self.start_ssh_tunnel()
+        server_address = (self.ip_addr, self.port_num) # Start on local socket [8001,8002,8003]
         print('Trying to connect to %s port %s' % server_address)    
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect(server_address)
             print("Successfully connected to the Ultra96 server")
-        except Exception as e:
+        except Exception:
             print('An error has occured when trying to connect to Ultra96 Server.')
 
+    '''
+    Methods for Encryption and Decryption
+    '''
     def add_padding(self, message):
         pad = lambda s: s + (BLOCK_SIZE - (len(s) % BLOCK_SIZE)) * PADDING
         padded_message = pad(message)
         return padded_message
 
-    def encrypt_message(self, dancer_id, RRT, offset, raw_data):
-        raw_message = '#' + str(dancer_id) + '|' + str(RRT) + '|' + str(offset) + '|' + raw_data
-        padded_message = self.add_padding(raw_message)
-        iv = Random.new().read(AES.block_size)
-        aes_key = bytes(str(self.secret_key), encoding="utf8")
+    def encrypt_message(self, plain_text):
+        padded_message = self.add_padding(plain_text)
+        iv = Random.new().read(BLOCK_SIZE)
+        aes_key = bytes(str(self.secret_key), encoding=FORMAT)
         cipher = AES.new(aes_key, AES.MODE_CBC, iv)
-        encrypted_message = base64.b64encode(iv + cipher.encrypt(bytes(padded_message, "utf8")))
+        encrypted_message = base64.b64encode(iv + cipher.encrypt(bytes(padded_message,FORMAT)))
         return encrypted_message
 
-    def send_data(self, dancer_id, RRT, offset, raw_data):
-        # raw_message = raw_message.encode("utf8")
-        encrypted_message = self.encrypt_message(dancer_id, RRT, offset, raw_data)
+    def decrypt_message(self, cipher_text):
+        decoded_message = base64.b64decode(cipher_text)
+        iv = decoded_message[:16]
+        secret_key = bytes(str(self.secret_key), encoding=FORMAT)
+
+        cipher = AES.new(secret_key, AES.MODE_CBC, iv)
+
+        decrypted_message = cipher.decrypt(decoded_message[16:]).strip()
+        decrypted_message = decrypted_message.decode(FORMAT)
+
+        decrypted_message = decrypted_message[decrypted_message.find('#'):]
+        decrypted_message = bytes(decrypted_message[1:], 'utf8').decode('utf8')
+
+        return decrypted_message
+
+    '''
+    Retrieve message from Bluno and Send to Ultra96 Server
+    '''
+    def manage_bluno_data(self):
+        # Don't send anything until all dancer ready flag is set
+        while self.start_evaluation:
+
+            # Simluate Sending T packet to initialize Time Sync Protocol
+            if self.start_time_sync:
+                self.sync_clock()
+                self.start_time_sync = False
+                time.sleep(3)
+                print('Waiting 3s for all dancers to run Time Sync Protocol!')
+            
+            # Simulate retrieve and send data to Ultra96 Server
+            #raw_data = '#D|' + str(self.dancer_id) + '|Ax|Ay|Az|Rx|Ry|Rz'
+            
+            timestamp = time.time()
+            raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + '|1|1.5|2.0|0.5|0.7|0.9|S|' + str(timestamp) + '|'
+            
+            #emg_data = '#E|' + str(self.dancer_id) + '|emg'
+            #emg_data = '#E|' + str(self.dancer_id) + '|225'
+            self.send_data(raw_data)
+            time.sleep(5)
+        
+
+    def send_data(self, data):
+        encrypted_message = self.encrypt_message(data)
         self.socket.sendall(encrypted_message)
 
+    '''
+    Functions to call to initiate Time Sync Protocol that calculates RRT and Offset
+    '''
+    def sync_clock(self):
+        self.RTT = 0.0
+        self.offset = 0.0
+        timestamp_data = '#T|' + str(self.dancer_id).strip() + '|'
+        # Timestamp t1: When laptop receives a packet from Bluno Beetle
+        t1 = time.time()
+        print('<==========Starting Time Sync Protocol==========>')
+        print('Sending Time Sync Packet. Timestamp t1: ', str(t1))
+        self.send_data(timestamp_data)
+
+        timestamp = self.receive_timestamp()
+        # Timestamp t4: When laptop receives time sync response from Ultra96
+        t4 = time.time()
+        t2 = float(timestamp.split('|')[0])
+        print('Ultra96 received Packet.  Timestamp t2: ', str(t2))
+        t3 = float(timestamp.split('|')[1])
+        print('Ultra96 sent response.    Timestamp t3: ', str(t3))
+        print('Received Timestamp.       Timestamp t4: ', str(t4))
+        
+        self.RTT = (t2 - t1) - (t3 - t4)
+        print('Round Trip Time: ', str(self.RTT))
+
+        self.offset = (t2 - t1) - self.RTT/2
+        print('Clock Offset: ', str(self.offset))
+        print('<===============================================>')
+        timestamp_data = '#O|' + str(self.dancer_id).strip() + '|' + str(self.offset).strip() + '|'
+        self.send_data(timestamp_data)
+
     def receive_timestamp(self):
-        message = self.socket.recv(1024)
-        timestamp = message.decode(FORMAT)
-        return timestamp
+        data = self.socket.recv(1024)
+        if data:
+            try:
+                timestamp = self.decrypt_message(data)
+                return timestamp
+            except Exception:
+                print('Did not receive return timestamp packet from Ultra96 Server!')
 
     '''
     Get time from NTP Server and calculate offset with system(laptop) clock
-    '''
+    
     def ntp_time_sync(self):
         try:
             ntp_client = ntplib.NTPClient()
@@ -118,11 +217,10 @@ class Client():
             print(responsed.tx_time)
         except Exception as e:
             return None
+    '''
 
     def stop(self):
-        self.connection.close()
-        self.shutdown.set()
-        self.timer.cancel()
+        self.socket.close()
 
 def main():
     if len(sys.argv) != 2:
@@ -132,48 +230,20 @@ def main():
 
     dancer_id = int(sys.argv[1])
     ip_addr = '127.0.0.1'
-    port_num = PORT_NUM[dancer_id-1]
+    #port_num = PORT_NUMS[dancer_id-1]
+    port_num = 8000
     group_id = GROUP_ID
     secret_key = SECRET_KEY
 
-    my_client = Client(ip_addr, port_num, group_id, secret_key)
+    my_client = Client(dancer_id, ip_addr, port_num, group_id, secret_key)
     my_client.run()
-    my_client.ntp_time_sync()
-    time.sleep(10)
+    my_client.wait_for_start()
+    #my_client.ntp_time_sync()
+    # Simulate sending data from Bluno for Testing
+    my_client.manage_bluno_data()
 
-    RTT = 0.0
-    offset = 0.0
+    #my_client.stop()
 
-    # Simulate Data sent to Laptop every 5 seconds for 5 times
-    count = 0
-    action = ' '
-
-    while action != "logout":
-        # Timestamp t1: When laptop receives a packet from Bluno Beetle
-        t1 = time.time()
-        print('Sending Time Sync Packet. Timestamp t1: ', str(t1))
-
-
-        my_client.send_data(dancer_id, RTT, offset, "raw_data")
-        timestamp = my_client.receive_timestamp()
-        # Timestamp t4: When laptop receives time sync response from Ultra96
-        t4 = time.time()
-        t2 = float(timestamp.split('|')[0])
-        print('Ultra96 received Packet.  Timestamp t2: ', str(t2))
-        t3 = float(timestamp.split('|')[1])
-        print('Ultra96 sent response.    Timestamp t3: ', str(t3))
-        print('Received Timestamp.       Timestamp t4: ', str(t4))
-        
-        RTT = (t2 - t1) - (t3 - t4)
-        print('Round Trip Time: ', str(RTT))
-
-        offset = (t2 - t1) - RTT/2
-        print('Clock Offset: ', str(offset))
-
-        time.sleep(5)
-        count += 1
-        if (count == 5):
-            my_client.stop()
 
 if __name__ == '__main__':
     main()
