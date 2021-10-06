@@ -95,28 +95,28 @@ void checkFIFO() {
 // * Function to calibrate MPU offset
 void calibrateMPUOffset() {
     // BLE 1
-    mpu.setXAccelOffset(271);
-    mpu.setYAccelOffset(1047);
-    mpu.setZAccelOffset(1071);
-    mpu.setXGyroOffset(50);
-    mpu.setYGyroOffset(54);
-    mpu.setZGyroOffset(29);
+//    mpu.setXAccelOffset(505);
+//    mpu.setYAccelOffset(972);
+//    mpu.setZAccelOffset(1078);
+//    mpu.setXGyroOffset(20);
+//    mpu.setYGyroOffset(26);
+//    mpu.setZGyroOffset(30);
 
     // BLE 2
-//        mpu.setXAccelOffset(-3553);
-//        mpu.setYAccelOffset(599);
-//        mpu.setZAccelOffset(1346);
-//        mpu.setXGyroOffset(34);
-//        mpu.setYGyroOffset(161);
-//        mpu.setZGyroOffset(-12);
+//        mpu.setXAccelOffset(-3114);
+//        mpu.setYAccelOffset(745);
+//        mpu.setZAccelOffset(1368);
+//        mpu.setXGyroOffset(32);
+//        mpu.setYGyroOffset(158);
+//        mpu.setZGyroOffset(-14);
 
     // BLE 3
-//        mpu.setXAccelOffset(579);
-//        mpu.setYAccelOffset(-201);
-//        mpu.setZAccelOffset(863);
-//        mpu.setXGyroOffset(18);
-//        mpu.setYGyroOffset(-43);
-//        mpu.setZGyroOffset(-80);
+        mpu.setXAccelOffset(785);
+        mpu.setYAccelOffset(-481);
+        mpu.setZAccelOffset(905);
+        mpu.setXGyroOffset(2);
+        mpu.setYGyroOffset(-22);
+        mpu.setZGyroOffset(-85);
 
 }
 
@@ -270,8 +270,6 @@ void sendDataPacket() {
     Serial.write(DATA_PACKET);
     crc.add(DATA_PACKET);
 
-    getAccValues();
-
     // 6 bytes accelerometer, 12 bytes rotational (YPR)
     writeIntToSerial(accelX);
     writeIntToSerial(accelY);
@@ -383,6 +381,7 @@ void loop() {
         }
     }
 
+    getAccValues();
     detectStartMove();
 
     // Handshake completed
