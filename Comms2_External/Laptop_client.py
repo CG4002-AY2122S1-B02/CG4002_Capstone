@@ -94,11 +94,11 @@ class Client():
                     self.start_evaluation = True
             except socket.timeout:
                 print('Still waiting for one of the dancers T.T !!!')
-    
+
     def run(self):
         #self.start_ssh_tunnel()
         server_address = (self.ip_addr, self.port_num) # Start on local socket [8001,8002,8003]
-        print('Trying to connect to %s port %s' % server_address)    
+        print('Trying to connect to %s port %s' % server_address)
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect(server_address)
@@ -150,18 +150,19 @@ class Client():
                 self.start_time_sync = False
                 time.sleep(3)
                 print('Waiting 3s for all dancers to run Time Sync Protocol!')
-            
+
             # Simulate retrieve and send data to Ultra96 Server
             #raw_data = '#D|' + str(self.dancer_id) + '|Ax|Ay|Az|Rx|Ry|Rz'
-            
+
             timestamp = time.time()
             raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + '|1|1.5|2.0|0.5|0.7|0.9|S|' + str(timestamp) + '|'
-            
+            # TODO add start of dance move at the end
+
             #emg_data = '#E|' + str(self.dancer_id) + '|emg'
             #emg_data = '#E|' + str(self.dancer_id) + '|225'
             self.send_data(raw_data)
             time.sleep(5)
-        
+
 
     def send_data(self, data):
         encrypted_message = self.encrypt_message(data)
@@ -188,7 +189,7 @@ class Client():
         t3 = float(timestamp.split('|')[1])
         print('Ultra96 sent response.    Timestamp t3: ', str(t3))
         print('Received Timestamp.       Timestamp t4: ', str(t4))
-        
+
         self.RTT = (t2 - t1) - (t3 - t4)
         print('Round Trip Time: ', str(self.RTT))
 
@@ -209,7 +210,7 @@ class Client():
 
     '''
     Get time from NTP Server and calculate offset with system(laptop) clock
-    
+
     def ntp_time_sync(self):
         try:
             ntp_client = ntplib.NTPClient()
