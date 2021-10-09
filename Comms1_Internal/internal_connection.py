@@ -162,7 +162,6 @@ class Delegate(DefaultDelegate):
         # logging.info("#DEBUG#: Calculated checksum: %s vs Received: %s" % (calcChecksum, self.buffer[length]))
         return calcChecksum == self.buffer[length]
 
-    # TODO Change this to external comms code in the future
     def sendDataToUltra96(self, data):
         BEETLE_OKAY_NUM[self.mac_addr] += 1
         logging.info("From %s: %s" % (self.mac_addr, data))

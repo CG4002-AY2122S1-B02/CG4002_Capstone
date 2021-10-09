@@ -156,7 +156,6 @@ class Client():
 
             timestamp = time.time()
             raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + '|1|1.5|2.0|0.5|0.7|0.9|S|' + str(timestamp) + '|'
-            # TODO add start of dance move at the end
 
             #emg_data = '#E|' + str(self.dancer_id) + '|emg'
             #emg_data = '#E|' + str(self.dancer_id) + '|225'

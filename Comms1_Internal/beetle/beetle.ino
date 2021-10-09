@@ -11,7 +11,7 @@
 #define RESET_PACKET 'R'
 #define DATA_PACKET 'D'
 #define EMG_PACKET 'E'
-#define START_DANCE_PACKET 'S' // TODO yet to be implemented
+#define START_DANCE_PACKET 'S'
 #define TIMESTAMP 'T'
 
 // * Time related global variables
