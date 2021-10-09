@@ -1,12 +1,12 @@
 # %%
 # * Imports and initialization
+import argparse
 from time import sleep, time
-from typing import Match
-from bluepy.btle import BTLEDisconnectError, Scanner, DefaultDelegate, Peripheral
+from bluepy.btle import BTLEDisconnectError, DefaultDelegate, Peripheral
 import struct
 from crccheck.crc import Crc8
 import logging
-import os
+import Laptop_client
 
 
 # * Different Packet Types
@@ -26,44 +26,47 @@ BLE_CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
 
 # * Mac Addresses of Bluno Beetles
-# BEETLE_1 = 'b0:b1:13:2d:b4:01'
-BEETLE_2 = 'b0:b1:13:2d:b6:55'
-BEETLE_3 = 'b0:b1:13:2d:b5:0d'
-TEMP_BEETLE = 'b0:b1:13:2d:d4:ca'
-ALL_BEETLE_MAC = [TEMP_BEETLE]
+BEETLE_1 = 'b0:b1:13:2d:b4:02'
+BEETLE_2 = 'b0:b1:13:2d:d3:58'
+BEETLE_3 = 'b0:b1:13:2d:b4:01'
+ALL_BEETLE_MAC = [BEETLE_3]
 
 
 # * Handshake status of Beetles
 BEETLE_HANDSHAKE_STATUS = {
-    # BEETLE_1: False,
+    BEETLE_1: False,
     BEETLE_2: False,
-    BEETLE_3: False,
-    TEMP_BEETLE: False
+    BEETLE_3: False
 }
 
 # * Requesting Reset status of Beetles
 BEETLE_REQUEST_RESET_STATUS = {
-    # BEETLE_1: False,
+    BEETLE_1: False,
     BEETLE_2: False,
     BEETLE_3: False,
-    TEMP_BEETLE: False
 }
 
 # ! FOR DEBUGGING AND LOGGING
 BEETLE_CORRUPTION_NUM = {
-    # BEETLE_1: 0,
+    BEETLE_1: 0,
     BEETLE_2: 0,
     BEETLE_3: 0,
-    TEMP_BEETLE: 0
 }
 
 BEETLE_OKAY_NUM = {
-    # BEETLE_1: 0,
+    BEETLE_1: 0,
     BEETLE_2: 0,
     BEETLE_3: 0,
-    TEMP_BEETLE: 0
 }
 
+BEETLE_DANCER_ID = {
+    '1': BEETLE_1,
+    '2': BEETLE_2,
+    '3': BEETLE_3
+}
+
+USE_FAKE_DATA = False
+laptop_client = Laptop_client
 start = 0
 
 # %%
@@ -71,9 +74,10 @@ start = 0
 # * Delegate that is attached to each Beetle peripheral
 class Delegate(DefaultDelegate):
 
-    def __init__(self, mac_addr):
+    def __init__(self, mac_addr, dancer_id):
         DefaultDelegate.__init__(self)
         self.mac_addr = mac_addr
+        self.dancer_id = dancer_id
         self.buffer = b''
 
     # * Handles incoming packets from serial comms
@@ -100,25 +104,27 @@ class Delegate(DefaultDelegate):
                     BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
                     return
 
-                self.sendDataToUltra96(parsed_packet_data)
+                # TODO double confirm EMG packet from Arduino
+                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
+                laptop_client.send_data(reformatted_data)
                 self.buffer = self.buffer[20:]
 
-            # Received Data Packet 14 bytes
+            # Received Data Packet 19 bytes
             # * ASCII Code D (DATA)
             elif (self.buffer[0] == 68 and len(self.buffer) >= 20):
-                data_packet_data = raw_packet_data[0: 14]
+                data_packet_data = raw_packet_data[0: 19]
                 parsed_packet_data = struct.unpack(
-                    '!chhhhhhc', data_packet_data)
+                    '!chhhhhhcLc', data_packet_data)
 
-                if not self.checkCRC(13):
+                if not self.checkCRC(18):
                     logging.info(
                         "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
                     BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
                     self.buffer = b''
                     return
 
-                # TODO send_data
-                self.sendDataToUltra96(parsed_packet_data)
+                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
+                laptop_client.send_data(reformatted_data)
                 self.buffer = self.buffer[20:]
 
             # Received Timestamp packet 6 bytes
@@ -136,7 +142,8 @@ class Delegate(DefaultDelegate):
 
                 # todo sync_clock
                 # TODO change timestamp packet every 30 seconds? 1 min?
-                self.sendDataToUltra96(parsed_packet_data)
+                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
+                logging.info(reformatted_data)
                 self.buffer = self.buffer[20:]
 
                 logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
@@ -166,16 +173,26 @@ class Delegate(DefaultDelegate):
         # logging.info("#DEBUG#: Calculated checksum: %s vs Received: %s" % (calcChecksum, self.buffer[length]))
         return calcChecksum == self.buffer[length]
 
-    # TODO Change this to external comms code in the future
-    def sendDataToUltra96(self, data):
+    def formatDataForUltra96(self, parsed_data):
         BEETLE_OKAY_NUM[self.mac_addr] += 1
-        logging.info("From %s: %s" % (self.mac_addr, data))
+        packet_start = "#" + str(parsed_data[0], 'UTF-8') + "|" + str(self.dancer_id) + "|"
+
+        if (parsed_data[0] == b'D'):
+            # Add start of dance + Timestamp
+            reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -3]))
+            reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(parsed_data[8]) + "|"
+        else:
+            reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1]))
+
+        # logging.info("#DEBUG#: Formatted packet %s" % reformatted_data)
+        return reformatted_data
 
 
 class BeetleThread():
-    def __init__(self, beetle_peripheral_object):
+    def __init__(self, beetle_peripheral_object, dancer_id):
 
         self.beetle_periobj = beetle_peripheral_object
+        self.dancer_id = dancer_id
         self.serial_service = self.beetle_periobj.getServiceByUUID(
             BLE_SERVICE_UUID)
         self.serial_characteristic = self.serial_service.getCharacteristics()[
@@ -229,7 +246,7 @@ class BeetleThread():
             sleep(1)
             self.beetle_periobj.connect(self.beetle_periobj.addr)
             self.beetle_periobj.withDelegate(
-                Delegate(self.beetle_periobj.addr))
+                Delegate(self.beetle_periobj.addr, self.dancer_id))
             logging.info("Reconnection successful with %s" %
                          self.beetle_periobj.addr)
         except Exception as e:
@@ -253,7 +270,7 @@ class BeetleThread():
                 if BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     break
 
-                if self.beetle_periobj.waitForNotifications(2) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
+                if self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     continue
 
             self.reset()
@@ -267,92 +284,39 @@ class BeetleThread():
             self.run()
 
 
-class Initialize:
-
-    # * Utilize MAC address of Beetles and directly create connection with them
-    def start_peripherals():
-        created_beetle_peripherals = []
-        for mac in ALL_BEETLE_MAC:
-            try:
-                # May throw BETLEException
-                logging.info("#DEBUG# Attempting connection to %s" % mac)
-                beetle = Peripheral(mac)
-            except Exception as e:
-                logging.info(
-                    "#DEBUG#: Failed to create peripheral for %s. Exception: %s" % (mac, e))
-                continue
-
-            beetle.withDelegate(Delegate(mac))
-            created_beetle_peripherals.append(beetle)
-        return created_beetle_peripherals
-
-    # ! DEPRE this was only used for testing
-    # Returns a list of bluepy devices that match Beetle's MAC
-    def scan():
-        # Initialize scanner to hci0 interface (ensure this interface is bluetooth)
-        scanner = Scanner(0)
-        devices = scanner.scan(5)
-        found_beetles = []
-        for device in devices:
-            if device.addr in ALL_BEETLE_MAC:
-                found_beetles.append(device)
-        logging.info('#DEBUG#: %s Beetle found!' % (len(found_beetles)))
-        return found_beetles
-
-    # ! DEPRE this was only used for testing
-    # Devices are a list of ScanEntries that match Beetle's MAC
-    # Returns a list of created Peripherals for Beetles
-    def create_peripherals(devices):
-        created_beetle_peripherals = []
-        for dev in devices:
-            try:
-                # May throw BTLEException
-                beetle = Peripheral(dev.addr)
-            except:
-                logging.info(
-                    "#DEBUG#: Failed to create peripheral for %s. Retrying..." % dev.addr)
-                beetle = Peripheral(dev.addr)
-
-            beetle.setDelegate(Delegate(dev.addr))
-            created_beetle_peripherals.append(beetle)
-        return created_beetle_peripherals
-
-
 # %%
 # ! Actual main code
 if __name__ == '__main__':
+
+    parser = argparse.ArgumentParser(description = "Setup options")
+    parser.add_argument('-f', '--fake-data', default = False, action='store_true', help = 'fake_data')
+    parser.add_argument('-id', '--dancer-id', default = 1, help = 'dancer id')
+    args = parser.parse_args()
+    USE_FAKE_DATA = args.fake_data
+    dancer_id = args.dancer_id
+
     # * Setup Logging
     logging.basicConfig(
         format="%(process)d %(message)s",
         level=logging.INFO
     )
 
-    # beetle_peripherals = Initialize.start_peripherals()
+    laptop_client = Laptop_client.main(dancer_id)
 
     start = time()
 
-    # ! Depre because of covid
-    # for mac in ALL_BEETLE_MAC:
-    #     pid = os.fork()
-    #     if pid > 0:
-    #         logging.info("Spawning Child Process")
-    #     else:
-    #         logging.info("#DEBUG# Attempting connection to %s" % mac)
-    #         try:
-    #             # May throw BTLEException
-    #             beetle = Peripheral(mac)
-    #         except:
-    #             logging.info(
-    #                 "#DEBUG#: Failed to create peripheral for %s. Retrying once more." % mac)
-    #             sleep(2)
-    #             beetle = Peripheral(mac)
-    #         beetle.withDelegate(Delegate(mac))
-    #         BeetleThread(beetle).run()
+    if (USE_FAKE_DATA):
+        laptop_client.manage_bluno_data()
+    else:
+        # * Change ALL_BEETLE_MAC to only include one dancer's Beetle
+        mac = BEETLE_DANCER_ID[dancer_id]
+        try:
+            beetle = Peripheral(mac)
+            beetle.withDelegate(Delegate(mac, dancer_id))
+        except:
+            sleep(5)
+            beetle = Peripheral(mac)
+            beetle.withDelegate(Delegate(mac, dancer_id))
 
-    # * Change ALL_BEETLE_MAC to only include one dancer's Beetle
-    for mac in ALL_BEETLE_MAC:
-        beetle = Peripheral(mac)
-        beetle.withDelegate(Delegate(mac))
-
-        BeetleThread(beetle).run()
+        BeetleThread(beetle, dancer_id).run()
 
