@@ -63,9 +63,9 @@ int32_t lastDetectedMoveTime;
 int16_t accelX;
 int16_t accelY;
 int16_t accelZ;
-float rotX;
-float rotY;
-float rotZ;
+int16_t rotX;
+int16_t rotY;
+int16_t rotZ;
 
 // * Buffer related
 byte twoByteBuf[2];
@@ -142,9 +142,9 @@ void getAccValues() {
     accelY = aaReal.y;
     accelZ = aaReal.z;
 
-    rotX = ypr[0];
-    rotY = ypr[1];
-    rotZ = ypr[2];
+    rotX = (int) (ypr[0] * 10000);
+    rotY = (int) (ypr[1] * 10000);
+    rotZ = (int) (ypr[2] * 10000);
 
     // Replace the oldest value with the newest value in the next loop
     curr_frame = (curr_frame + 1) % 10;
@@ -263,22 +263,24 @@ void sendACKPacket(char packetType) {
     crc.restart(); // Restart crc caclulation
 }
 
-// * Total 20 bytes currently + 0 byte paddings
+// * Total 14 bytes currently + 6 byte paddings
 void sendDataPacket() {
 
     // One byte packet type and add to CRC
     Serial.write(DATA_PACKET);
     crc.add(DATA_PACKET);
 
-    // 6 bytes accelerometer, 12 bytes rotational (YPR)
+    // 6 bytes accelerometer, 6 bytes rotational (YPR)
     writeIntToSerial(accelX);
     writeIntToSerial(accelY);
     writeIntToSerial(accelZ);
-    writeFloatToSerial(rotX);
-    writeFloatToSerial(rotY);
-    writeFloatToSerial(rotZ);
+    writeIntToSerial(rotX);
+    writeIntToSerial(rotY);
+    writeIntToSerial(rotZ);
 
     Serial.write(crc.getCRC()); // One byte checksum
+
+    padPacket(6);
 
     crc.restart();
 }
@@ -370,6 +372,7 @@ void loop() {
                 break;
             case ACK_PACKET:
                 // Received last ACK from laptop. Handshake complete
+                Serial.flush();
                 if (handshakeStart) {
                     handshakeStart = false;
                     handshakeEnd = true;
