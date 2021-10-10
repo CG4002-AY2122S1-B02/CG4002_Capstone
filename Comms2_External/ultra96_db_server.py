@@ -11,6 +11,8 @@ from multiprocessing import Process,Queue,Pipe
 from queue import Queue
 
 import packet_pb2
+import math_loser
+import pandas as pd
 
 from Crypto import Random
 from Crypto.Cipher import AES
@@ -44,7 +46,7 @@ CONNECT_TO_DATABASE = False
 CONNECT_TO_EVAL_SERVER = False
 
 # By default set to False. Specify '-C' while running script for data collection mode.
-DATA_COLLECTION_MDOE = False
+DATA_COLLECTION_MODE = False
 
 position_stream_test = [
     packet_pb2.Position(
@@ -116,6 +118,7 @@ class Ultra96_Server(threading.Thread):
 
         # For the purpose of testing
         self.num_of_moves_predicted = 0
+        self.predicted_move = 0
 
         # Variables for Time Sync Protocol
         self.dancer_sync_delay = 0
@@ -523,6 +526,16 @@ class Ultra96_Server(threading.Thread):
                 if verbose:
                     print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
                 self.num_of_moves_predicted = self.num_of_moves_predicted + 1
+
+                with open('test_single_y.txt', 'r') as f:
+                    _y = f.readline().strip()
+                print(_y)
+                _input_data = pd.read_csv("test_single_x.csv", index_col=False).to_numpy()
+                _input_data = _input_data.astype('float32')
+                print(f"shape of the input we passed in initially is {_input_data.shape}")
+                print(f"type of the input we passed in is {_input_data.dtype}")
+                self.predicted_move = math_loser.math_loser(_input_data)
+                print(self.predicted_move)
                 self.send_and_receive_eval_server('Dab')
                 self.is_dancers_predicted[0] = False
                 self.is_dancers_predicted[1] = False
@@ -575,7 +588,7 @@ class Ultra96_Server(threading.Thread):
 def main(secret_key):
     global CONNECT_TO_DATABASE
     global CONNECT_TO_EVAL_SERVER
-    global DATA_COLLECTION_MDOE
+    global DATA_COLLECTION_MODE
 
     u96_server = Ultra96_Server(IP_ADDR, PORT_NUM, GROUP_ID, secret_key)
     u96_server.start()
