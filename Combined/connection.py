@@ -8,6 +8,9 @@ from crccheck.crc import Crc8
 import logging
 import Laptop_client
 
+import pandas as pd
+import numpy as np
+
 
 # * Different Packet Types
 HELLO = 'H'
@@ -29,7 +32,7 @@ BLE_CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 BEETLE_1 = 'b0:b1:13:2d:b4:02'
 BEETLE_2 = 'b0:b1:13:2d:d3:58'
 BEETLE_3 = 'b0:b1:13:2d:b4:01'
-ALL_BEETLE_MAC = [BEETLE_3]
+ALL_BEETLE_MAC = [BEETLE_2]
 
 
 # * Handshake status of Beetles
@@ -69,6 +72,8 @@ USE_FAKE_DATA = False
 laptop_client = Laptop_client
 start = 0
 
+List_Of_Data = []
+
 # %%
 
 # * Delegate that is attached to each Beetle peripheral
@@ -76,6 +81,7 @@ class Delegate(DefaultDelegate):
 
     def __init__(self, mac_addr, dancer_id):
         DefaultDelegate.__init__(self)
+        self.Trial_Num = 0
         self.mac_addr = mac_addr
         self.dancer_id = dancer_id
         self.buffer = b''
@@ -124,7 +130,7 @@ class Delegate(DefaultDelegate):
                     return
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                laptop_client.send_data(reformatted_data)
+                # laptop_client.send_data(reformatted_data)
                 self.buffer = self.buffer[20:]
 
             # Received Timestamp packet 6 bytes
@@ -181,10 +187,17 @@ class Delegate(DefaultDelegate):
             # Add start of dance + Timestamp
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -3]))
             reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(parsed_data[8]) + "|"
+
+            # TODO append to CSV for data training
+            if (str(parsed_data[7], 'UTF-8') == "S"):
+                self.Trial_Num += 1
+            dataList = [self.Trial_Num] + list(parsed_data[1: -3])
+            List_Of_Data.append(dataList)
+
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1]))
 
-        # logging.info("#DEBUG#: Formatted packet %s" % reformatted_data)
+        logging.info("#DEBUG#: Formatted packet %s" % reformatted_data)
         return reformatted_data
 
 
@@ -210,20 +223,20 @@ class BeetleThread():
             while not BEETLE_HANDSHAKE_STATUS[self.beetle_periobj.addr]:
                 # May throw BTLEException
                 self.serial_characteristic.write(
-                    bytes(HELLO, 'utf-8'), withResponse=False)
+                    bytes(HELLO, 'utf-8'), withResponse=True)
                 logging.info("%s H packets sent to Beetle %s" %
                              (counter, self.beetle_periobj.addr))
                 counter += 1
 
                 # May be a case of faulty handshake.
                 # Beetle think handshake has completed but laptop doesn't
-                if counter % 20 == 0:
+                if counter % 5 == 0:
                     logging.info(
                         "Too many H packets sent. Arduino may be out of state. Resetting Beetle")
                     self.reset()
 
                 # True if received packet from Beetle. Return ACK
-                if self.beetle_periobj.waitForNotifications(3):
+                if self.beetle_periobj.waitForNotifications(4):
                     # logging.info("Successful connection with %s" %
                     #       self.beetle_periobj.addr)
                     # May throw BTLEEXcpetion
@@ -287,36 +300,39 @@ class BeetleThread():
 # %%
 # ! Actual main code
 if __name__ == '__main__':
+    try:
+        parser = argparse.ArgumentParser(description = "Setup options")
+        parser.add_argument('-f', '--fake-data', default = False, action='store_true', help = 'fake_data')
+        parser.add_argument('-id', '--dancer-id', default = 1, help = 'dancer id')
+        args = parser.parse_args()
+        USE_FAKE_DATA = args.fake_data
+        dancer_id = args.dancer_id
 
-    parser = argparse.ArgumentParser(description = "Setup options")
-    parser.add_argument('-f', '--fake-data', default = False, action='store_true', help = 'fake_data')
-    parser.add_argument('-id', '--dancer-id', default = 1, help = 'dancer id')
-    args = parser.parse_args()
-    USE_FAKE_DATA = args.fake_data
-    dancer_id = args.dancer_id
+        # * Setup Logging
+        logging.basicConfig(
+            format="%(process)d %(message)s",
+            level=logging.INFO
+        )
 
-    # * Setup Logging
-    logging.basicConfig(
-        format="%(process)d %(message)s",
-        level=logging.INFO
-    )
+        # laptop_client = Laptop_client.main(dancer_id)
 
-    laptop_client = Laptop_client.main(dancer_id)
+        start = time()
 
-    start = time()
+        if (USE_FAKE_DATA):
+            laptop_client.manage_bluno_data()
+        else:
+            # * Change ALL_BEETLE_MAC to only include one dancer's Beetle
+            mac = BEETLE_DANCER_ID[dancer_id]
+            try:
+                beetle = Peripheral(mac)
+                beetle.withDelegate(Delegate(mac, dancer_id))
+            except:
+                sleep(5)
+                beetle = Peripheral(mac)
+                beetle.withDelegate(Delegate(mac, dancer_id))
 
-    if (USE_FAKE_DATA):
-        laptop_client.manage_bluno_data()
-    else:
-        # * Change ALL_BEETLE_MAC to only include one dancer's Beetle
-        mac = BEETLE_DANCER_ID[dancer_id]
-        try:
-            beetle = Peripheral(mac)
-            beetle.withDelegate(Delegate(mac, dancer_id))
-        except:
-            sleep(5)
-            beetle = Peripheral(mac)
-            beetle.withDelegate(Delegate(mac, dancer_id))
-
-        BeetleThread(beetle, dancer_id).run()
+            BeetleThread(beetle, dancer_id).run()
+    except KeyboardInterrupt: 
+        df = pd.DataFrame(List_Of_Data)
+        df.to_csv('dab.csv')
 
