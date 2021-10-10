@@ -121,7 +121,7 @@ traitlets==4.3.2
 transitions==0.5.3
 typing-extensions==3.10.0.2
 unattended-upgrades==0.1
-urllib3==1.22
+urllib3==1.26.5
 uvloop==0.8.1
 wcwidth==0.1.7
 webencodings==0.5
