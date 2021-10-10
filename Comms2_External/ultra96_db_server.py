@@ -43,6 +43,9 @@ CONNECT_TO_DATABASE = False
 # By default set to False. Specify '-E' while running script to connect to eval server.
 CONNECT_TO_EVAL_SERVER = False
 
+# By default set to False. Specify '-C' while running script for data collection mode.
+DATA_COLLECTION_MDOE = False
+
 position_stream_test = [
     packet_pb2.Position(
         position="123"
@@ -111,6 +114,9 @@ class Ultra96_Server(threading.Thread):
         self.secret_key = secret_key
         self.shutdown = threading.Event()
 
+        # For the purpose of testing
+        self.num_of_moves_predicted = 0
+
         # Variables for Time Sync Protocol
         self.dancer_sync_delay = 0
         self.dancer_time_offset = {
@@ -170,6 +176,9 @@ class Ultra96_Server(threading.Thread):
         # Sequence 4: Create connections to database
         if CONNECT_TO_DATABASE:
             self.setup_connection_to_database()
+
+        #if DATA_COLLECTION_MDOE:
+        #    self.write_to_file()
 
     '''
     Allow and keep track of connections from each of the dancers laptops
@@ -314,7 +323,15 @@ class Ultra96_Server(threading.Thread):
         eval_data = '#' + self.current_positions + '|' + action + '|' + str(self.dancer_sync_delay) + '|'
         print('Sending the following message to Evaluation Server', eval_data)
         encrypted_message = self.encrypt_message(eval_data)
-        self.eval_server_socket.sendall(encrypted_message)
+        
+        try:
+            self.eval_server_socket.sendall(encrypted_message)
+        except:
+            print('Connection from Ultra96 to Evaluation Server lost! Attempting reconnection...')
+            self.setup_connection_to_eval_server()
+            time.sleep(5)
+            pass
+
         # Reset the start time map
         for key in self.start_time_map_dancers:
             self.start_time_map_dancers[key] = -1
@@ -439,7 +456,8 @@ class Ultra96_Server(threading.Thread):
                             #epoch_ms = int(self.dancer_1_offset)
                         )
                         packet.end = "\x7F"
-                        packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
+                        #packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
+                        packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.dancer_1_send_packet = False
@@ -453,7 +471,8 @@ class Ultra96_Server(threading.Thread):
                             #epoch_ms = int(self.dancer_2_offset)
                         )
                         packet.end = "\x7F"
-                        packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
+                        #packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
+                        packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.dancer_2_send_packet = False
@@ -467,7 +486,8 @@ class Ultra96_Server(threading.Thread):
                             #epoch_ms = int(self.dancer_3_offset)
                         )
                         packet.end = "\x7F"
-                        packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
+                        #packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
+                        packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.dancer_3_send_packet = False
@@ -500,6 +520,9 @@ class Ultra96_Server(threading.Thread):
         while True:
             if self.is_dancers_predicted[0] and self.is_dancers_predicted[1] and self.is_dancers_predicted[2]:
                 # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
+                if verbose:
+                    print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
+                self.num_of_moves_predicted = self.num_of_moves_predicted + 1
                 self.send_and_receive_eval_server('Dab')
                 self.is_dancers_predicted[0] = False
                 self.is_dancers_predicted[1] = False
@@ -552,11 +575,12 @@ class Ultra96_Server(threading.Thread):
 def main(secret_key):
     global CONNECT_TO_DATABASE
     global CONNECT_TO_EVAL_SERVER
+    global DATA_COLLECTION_MDOE
 
     u96_server = Ultra96_Server(IP_ADDR, PORT_NUM, GROUP_ID, secret_key)
     u96_server.start()
-    print('Waiting 10s for laptop and database connections to complete!')
-    time.sleep(10)
+    print('Waiting 60s for laptop, eval server & database connections to complete!')
+    time.sleep(60)
     u96_server.send_start_flag_to_laptops()
 
     # Shutdown Ultra96 Server after 10 mins of testing
@@ -568,6 +592,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--secret_key', metavar='', default='cg40024002group2', help='secret key')
     parser.add_argument('-D', '--connect_to_database', default=False, action='store_true', help='connect_to_database')
     parser.add_argument('-E', '--connect_to_eval_server', default=False, action='store_true', help='connect_to_eval_server')
+    parser.add_argument('-C', '--data_collection_mode', default=False, action='store_true', help='data_collection_mode')
     parser.add_argument('-V', '--verbose', default=False, action='store_true', help='verbose')
 
     args = parser.parse_args()
@@ -575,6 +600,8 @@ if __name__ == '__main__':
     secret_key = args.secret_key
     CONNECT_TO_DATABASE = args.connect_to_database
     CONNECT_TO_EVAL_SERVER = args.connect_to_eval_server
+    DATA_COLLECTION_MDOE = args.data_collection_mode
+
     verbose = args.verbose
 
     main(secret_key)

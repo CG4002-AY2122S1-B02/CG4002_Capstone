@@ -96,7 +96,7 @@ class Client():
                 print('Still waiting for one of the dancers T.T !!!')
     
     def run(self):
-        #self.start_ssh_tunnel()
+        self.start_ssh_tunnel()
         server_address = (self.ip_addr, self.port_num) # Start on local socket [8001,8002,8003]
         print('Trying to connect to %s port %s' % server_address)    
         try:
@@ -230,8 +230,8 @@ def main():
 
     dancer_id = int(sys.argv[1])
     ip_addr = '127.0.0.1'
-    #port_num = PORT_NUMS[dancer_id-1]
-    port_num = 8000
+    port_num = PORT_NUMS[dancer_id-1]
+    #port_num = 8000
     group_id = GROUP_ID
     secret_key = SECRET_KEY
 
