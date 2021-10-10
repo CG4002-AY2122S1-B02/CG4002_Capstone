@@ -3,3 +3,5 @@ dataset used: https://www.kaggle.com/malekzadeh/motionsense-dataset?select=data_
 I used the A_DeviceMotion sub folder,renamed it data and put into the root directory
 
 Because the data is large, i did not push to git.
+
+wait, I actually did push the data. =_=
