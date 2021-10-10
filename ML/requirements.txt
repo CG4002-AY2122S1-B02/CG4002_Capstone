@@ -79,7 +79,7 @@ pycparser==2.18
 pycrypto==2.6.1
 pycurl==7.43.0.1
 pyeda==0.28.0
-Pygments==2.2.0
+Pygments==2.7.4
 PyGObject==3.26.1
 pygraphviz==1.4rc1
 pynq==2.6.2
