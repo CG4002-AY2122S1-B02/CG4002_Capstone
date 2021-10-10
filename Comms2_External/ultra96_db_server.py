@@ -18,9 +18,9 @@ from Crypto import Random
 from Crypto.Cipher import AES
 
 # Initialise Variable Sizes
-MAX_DANCERS = 3
 MAX_DB_CONNECTIONS = 4
 BLUNO_PER_LAPTOP = 1
+NUM_OF_DANCERS = 3
 
 # Assign the host and port numbers of our Ultra96 Server 
 IP_ADDR = '127.0.0.1'
@@ -69,40 +69,15 @@ position_stream_test = [
     ),
 ]
 
-packet_stream_test = [
-    packet_pb2.Packet(
-        dance_move = "Dab",
-        accuracy=2,
-    ),
-    packet_pb2.Packet(
-        dance_move = "Scarecrow",
-        accuracy=1,
-    ),
-    packet_pb2.Packet(
-        dance_move = "Window360",
-        accuracy=3,
-    ),
-    packet_pb2.Packet(
-        dance_move = "James Bond",
-        accuracy=3,
-    ),
-    packet_pb2.Packet(
-        dance_move = "Mermaid",
-        accuracy=2,
-    ),
-    packet_pb2.Packet(
-        dance_move = "Push Back",
-        accuracy=2,
-    ),
-    packet_pb2.Packet(
-        dance_move = "Snake",
-        accuracy=3,
-    ),
-    packet_pb2.Packet(
-        dance_move = "Cowboy",
-        accuracy=1,
-    )
-]
+# Different Packet Types
+HELLO = 'H'
+ACK = 'A'
+RESET = 'R'
+DATA = 'D'
+EMG = 'E'
+START_DANCE = 'S'
+NORMAL_DANCE = 'N'
+TIMESTAMP = 'T'
 
 class Ultra96_Server(threading.Thread):
     def __init__(self, ip_addr, port_num, group_id, secret_key):
@@ -191,22 +166,22 @@ class Ultra96_Server(threading.Thread):
         # Create a TCP/IP socket and bind to port
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_address = (self.ip_addr, self.port_num)
-        print(f'Ultra96 Server starting on %s port %s. Allowing connection from {MAX_DANCERS} dancers laptops' % server_address)
+        print(f'Ultra96 Server starting on %s port %s. Allowing connection from {NUM_OF_DANCERS} dancers laptops' % server_address)
         self.socket.bind(server_address)
         # Listen for incoming connections
-        self.socket.listen(5)
+        self.socket.listen(NUM_OF_DANCERS+1)
         
         connection_counter = 0
         while True:
             connection, client_address = self.socket.accept()
             print(f'Connection from {client_address} has been establised')
             connection_counter += 1
-            if connection_counter <= MAX_DANCERS:
+            if connection_counter <= NUM_OF_DANCERS:
                 client_thread = threading.Thread(target=self.receive_and_send_data_laptop, args=(connection_counter,connection,client_address))
                 self.laptop_connections.append(connection)
                 client_thread.daemon=True
                 client_thread.start()
-                if connection_counter == MAX_DANCERS:
+                if connection_counter == NUM_OF_DANCERS:
                     self.laptops_connected = True
                     print('The maximum number of dancer laptop connections has been reached')
                     break
@@ -251,13 +226,13 @@ class Ultra96_Server(threading.Thread):
 
                         elif 'D' in packet_type: # Raw Data Packet
                             Ax = float(messages[2])
-                            #Ay = messages[3]
-                            #Az = messages[4]
-                            #Rx = messages[5]
-                            #Ry = messages[6]
-                            #Rz = messages[7]
+                            Ay = messages[3]
+                            Az = messages[4]
+                            Rx = messages[5]
+                            Ry = messages[6]
+                            Rz = messages[7]
                             start_flag = messages[8] # S | N
-                            timestamp = messages[9]
+                            timestamp = messages[9] # Currently (e.g. 734823 / 686270)
 
                             # Do Data processing here
                             if start_flag == 'S':
@@ -424,12 +399,22 @@ class Ultra96_Server(threading.Thread):
 
     def send_start_flag_to_laptops(self):
         # Send start flag to all dancers to tell them start sending data
-        if self.laptops_connected: #and self.database_connected:
-            for conn in self.laptop_connections:
-                encrypted_message = self.encrypt_message('#S|')
-                conn.sendall(encrypted_message)
-            self.start_evaluation = True
-            print('Evaluation will begin now! :-)')
+        if self.laptops_connected:
+            if CONNECT_TO_DATABASE:
+                if self.database_connected:
+                    # Wait for all laptops to connect and database to establish connection
+                    for conn in self.laptop_connections:
+                        encrypted_message = self.encrypt_message('#S|')
+                        conn.sendall(encrypted_message)
+                    self.start_evaluation = True
+                    print('Evaluation will begin now! :-)')
+            else:
+                # If database is not connected, just wait for all laptops to establish connection
+                for conn in self.laptop_connections:
+                    encrypted_message = self.encrypt_message('#S|')
+                    conn.sendall(encrypted_message)
+                self.start_evaluation = True
+                print('Evaluation will begin now! :-)')
 
     '''
     Run function that will be constantly checking for data and sending over to dashboard server
@@ -494,52 +479,45 @@ class Ultra96_Server(threading.Thread):
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.dancer_3_send_packet = False
-
-                # if self.dancer_1_send_packet and dancer_id == 1:
-                #     while not self.dancer_1_data.empty():
-                #         message = str(self.dancer_1_data.get())
-                #         conn.sendall(message.encode(FORMAT))
-                #         self.dancer_1_send_packet = False
-                #         print('Sending data to db via port: ' + str(addr[1]))
-
-                # elif self.dancer_2_send_packet and dancer_id == 2:
-                #     while not self.dancer_2_data.empty():
-                #         message = str(self.dancer_2_data.get())
-                #         conn.sendall(message.encode(FORMAT))
-                #         self.dancer_2_send_packet = False
-                #         print('Sending data to db via port: ' + str(addr[1]))
-
-                # elif self.dancer_3_send_packet and dancer_id == 3:
-                #     while not self.dancer_3_data.empty():
-                #         message = str(self.dancer_3_data.get())
-                #         conn.sendall(message.encode(FORMAT))
-                #         self.dancer_3_send_packet = False
-                #         print('Sending data to db via port: ' + str(addr[1]))
             
     '''
     Prediction funciton here that will integrate with SW1 (Ren Hao's ) code: Machine Learning 
     '''
     def generate_predictions(self):
         while True:
-            if self.is_dancers_predicted[0] and self.is_dancers_predicted[1] and self.is_dancers_predicted[2]:
-                # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
-                if verbose:
-                    print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
-                self.num_of_moves_predicted = self.num_of_moves_predicted + 1
-
-                with open('test_single_y.txt', 'r') as f:
-                    _y = f.readline().strip()
-                print(_y)
-                _input_data = pd.read_csv("test_single_x.csv", index_col=False).to_numpy()
-                _input_data = _input_data.astype('float32')
-                print(f"shape of the input we passed in initially is {_input_data.shape}")
-                print(f"type of the input we passed in is {_input_data.dtype}")
-                self.predicted_move = math_loser.math_loser(_input_data)
-                print(self.predicted_move)
-                self.send_and_receive_eval_server('Dab')
-                self.is_dancers_predicted[0] = False
-                self.is_dancers_predicted[1] = False
-                self.is_dancers_predicted[2] = False
+            if NUM_OF_DANCERS == 3:
+                if self.is_dancers_predicted[0] and self.is_dancers_predicted[1] and self.is_dancers_predicted[2]:
+                    # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
+                    if verbose:
+                        print(' ')
+                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
+                        print(' ')
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
+                    self.send_and_receive_eval_server('Dab')
+                    self.is_dancers_predicted[0] = False
+                    self.is_dancers_predicted[1] = False
+                    self.is_dancers_predicted[2] = False
+            elif NUM_OF_DANCERS == 2:
+                if self.is_dancers_predicted[0] and self.is_dancers_predicted[1]:
+                    # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
+                    if verbose:
+                        print(' ')
+                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
+                        print(' ')
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
+                    self.send_and_receive_eval_server('Dab')
+                    self.is_dancers_predicted[0] = False
+                    self.is_dancers_predicted[1] = False
+            elif NUM_OF_DANCERS == 1:
+                if self.is_dancers_predicted[0]:
+                    # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
+                    if verbose:
+                        print(' ')
+                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
+                        print(' ')
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
+                    self.send_and_receive_eval_server('Dab')
+                    self.is_dancers_predicted[0] = False
 
     '''
     Encryption and Decryption of messages using AES
@@ -588,7 +566,11 @@ class Ultra96_Server(threading.Thread):
 def main(secret_key):
     global CONNECT_TO_DATABASE
     global CONNECT_TO_EVAL_SERVER
+
+    global NUM_OF_DANCERS
+
     global DATA_COLLECTION_MODE
+
 
     u96_server = Ultra96_Server(IP_ADDR, PORT_NUM, GROUP_ID, secret_key)
     u96_server.start()
@@ -603,6 +585,7 @@ def main(secret_key):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Ultra96 Server set-up for Laptops to connect")
     parser.add_argument('-s', '--secret_key', metavar='', default='cg40024002group2', help='secret key')
+    parser.add_argument('-n', '--num_of_dancers', type=int, required=True, help='num_of_dancers')
     parser.add_argument('-D', '--connect_to_database', default=False, action='store_true', help='connect_to_database')
     parser.add_argument('-E', '--connect_to_eval_server', default=False, action='store_true', help='connect_to_eval_server')
     parser.add_argument('-C', '--data_collection_mode', default=False, action='store_true', help='data_collection_mode')
@@ -611,6 +594,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     secret_key = args.secret_key
+    NUM_OF_DANCERS = args.num_of_dancers
+    print(f'Starting dance session with {NUM_OF_DANCERS} dancers! :-D')
     CONNECT_TO_DATABASE = args.connect_to_database
     CONNECT_TO_EVAL_SERVER = args.connect_to_eval_server
     DATA_COLLECTION_MDOE = args.data_collection_mode
