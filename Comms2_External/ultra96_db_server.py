@@ -1,5 +1,6 @@
 # Test Script to receive connection on Ultra96 from Laptops 
 
+import os
 import argparse
 import sys
 import socket
@@ -47,6 +48,7 @@ CONNECT_TO_EVAL_SERVER = False
 
 # By default set to False. Specify '-C' while running script for data collection mode.
 DATA_COLLECTION_MODE = False
+LOG_DIR = os.path.join(os.path.dirname(__file__), 'test_run_logs')
 
 position_stream_test = [
     packet_pb2.Position(
@@ -88,12 +90,13 @@ class Ultra96_Server(threading.Thread):
         '''
         self.ip_addr = ip_addr
         self.port_num = port_num
+        self.group_id = group_id
         self.secret_key = secret_key
         self.shutdown = threading.Event()
 
         # For the purpose of testing
         self.num_of_moves_predicted = 0
-        self.predicted_move = 0
+        self.predicted_move = None
 
         # Variables for Time Sync Protocol
         self.dancer_sync_delay = 0
@@ -110,9 +113,10 @@ class Ultra96_Server(threading.Thread):
         }
 
         # Data Structures to store raw data from dancers
-        self.dancer_1_data = Queue()
-        self.dancer_2_data = Queue()
-        self.dancer_3_data = Queue()
+        self.dancer_data_map = {}
+        self.dancer_data_map[0] = Queue()
+        self.dancer_data_map[1] = Queue()
+        self.dancer_data_map[2] = Queue()
 
         # Data Structures to store positional data from dancers
         self.current_positions = '1 2 3'
@@ -121,6 +125,11 @@ class Ultra96_Server(threading.Thread):
         self.dancer_2_position_data = Queue()
         self.dancer_3_position_data = Queue()
 
+        self.dancer_prediction_map = {} # Used to send data to database
+        self.dancer_prediction_map[0] = Queue() 
+        self.dancer_prediction_map[1] = Queue()  
+        self.dancer_prediction_map[2] = Queue()          
+
         # Data Structures and Variables to ensure proper synchronization
         self.laptop_connections = []
         self.laptops_connected = False
@@ -128,15 +137,15 @@ class Ultra96_Server(threading.Thread):
         self.database_connected = False
         self.start_evaluation = False
 
-        self.dancer_1_send_position = False
+        self.dancer_1_send_position = False # Used to send data to database
         self.dancer_2_send_position = False
         self.dancer_3_send_position = False
 
-        self.dancer_1_send_packet = False
+        self.dancer_1_send_packet = False # Used to send data to database
         self.dancer_2_send_packet = False
         self.dancer_3_send_packet = False
 
-        self.is_dancers_predicted = [False,False,False]
+        self.is_dancers_predicted = [False,False,False] # Used for predictions
 
         # Sequence 0: Start the Evaluation Server
         # Sequence 1: Start this Ultra96_db_server.py Script
@@ -155,8 +164,15 @@ class Ultra96_Server(threading.Thread):
         if CONNECT_TO_DATABASE:
             self.setup_connection_to_database()
 
-        #if DATA_COLLECTION_MDOE:
-        #    self.write_to_file()
+        # Set up data collection logger
+        if DATA_COLLECTION_MODE:
+            self.log_filename = 'group{}_log.csv'.format(self.group_id)
+            if not os.path.exists(LOG_DIR):
+                os.makedirs(LOG_DIR)
+            self.log_filepath = os.path.join(LOG_DIR, self.log_filename)
+            self.columns = ['timestamp','packet_type','dancer_id','Ax','Ay','Az','Rx','Ry','Rz','start_flag']
+            self.df = pd.DataFrame(columns=self.columns)
+            self.df = self.df.set_index('timestamp')
 
     '''
     Allow and keep track of connections from each of the dancers laptops
@@ -208,8 +224,8 @@ class Ultra96_Server(threading.Thread):
                         if verbose:
                             print(' ')
                             print('Dancer Id: ', dancer_id)
-                            print('Received message: ', decrypted_message)
-                            
+                            print('Received message: ', decrypted_message)                       
+
                         if 'T' in packet_type: # Time Sync Packet
                             #if verbose:
                                 #print('Data received. Timestamp t2: ' + str(t2))
@@ -225,7 +241,7 @@ class Ultra96_Server(threading.Thread):
                             #Send to dashboard
 
                         elif 'D' in packet_type: # Raw Data Packet
-                            Ax = float(messages[2])
+                            Ax = messages[2]
                             Ay = messages[3]
                             Az = messages[4]
                             Rx = messages[5]
@@ -233,6 +249,8 @@ class Ultra96_Server(threading.Thread):
                             Rz = messages[7]
                             start_flag = messages[8] # S | N
                             timestamp = messages[9] # Currently (e.g. 734823 / 686270)
+
+                            self.write_move_to_logger(packet_type,str(dancer_id),Ax,Ay,Az,Rx,Ry,Rz,start_flag,timestamp)
 
                             # Do Data processing here
                             if start_flag == 'S':
@@ -246,28 +264,33 @@ class Ultra96_Server(threading.Thread):
                                         # Store the start timestamp of the dance move as well
                                         self.start_time_map_dancers[dancer_id] = float(timestamp)  
 
+                            # TO-DO: Store data in Global Queue for each dancer
+                            # When there is a certain amount of data collected, call ML function for prediction
                             if dancer_id == 1:
+                                # 1. Put data into queue
+                                # 2. Check for queue size
+                                # 3. If queue size == 40 (Means at 20hz, 2 seconds have passed, and 40 samples have been collected)
+                                # 4. Call ML function and clear the queue
+                                # 5. Set dancer predicted to true (self.is_dancers_predicted[dancer_id-1] = True)
                                 self.dancer_1_send_packet = True
-                                #raw_data = Ax + '|' + Ay + '|' + Az + '|' + Rx + '|' + Ry + '|' + Rz
-                                self.dancer_1_data.put(Ax)
+                                self.dancer_prediction_map[dancer_id-1].put(float(1))
                             elif dancer_id == 2:
                                 self.dancer_2_send_packet = True
-                                #raw_data = Ax + '|' + Ay + '|' + Az + '|' + Rx + '|' + Ry + '|' + Rz
-                                self.dancer_2_data.put(Ax)
+                                self.dancer_prediction_map[dancer_id-1].put(float(2))
                             elif dancer_id == 3:
                                 self.dancer_3_send_packet = True
-                                #raw_data = Ax + '|' + Ay + '|' + Az + '|' + Rx + '|' + Ry + '|' + Rz
-                                self.dancer_3_data.put(Ax)
+                                self.dancer_prediction_map[dancer_id-1].put(float(3))
 
                     except Exception as e:
                         print(e)
                 else:
                     print('no more data from', client_address)
+                    # Only stop on Keyboard Interrupt or Number of Predictions = Certain Amount
                     self.stop()
 
     def send_timestamp(self, t2, connection):
         t3 = time.time()
-        timestamp = '#' + str(t2) + '|' + str(t3) + '|'
+        timestamp = '#' + str(t2) + '|' + str(t3)
 
         #if verbose:
             #print('Sending Data. Timestamp t3: ' + str(t3))
@@ -295,10 +318,13 @@ class Ultra96_Server(threading.Thread):
             # Start dance move timestamp + Dancer Clock Offset = Actual timestamp relative to Ultra96
             timings_list.append(self.start_time_map_dancers[key] + self.dancer_time_offset[key])
             if timings_list[key-1] == -1:
-                print(f'The start timing for dancer {key} has not been updated!')
-                break
+                if NUM_OF_DANCERS == 1:
+                    pass
+                else:
+                    print(f'The start timing for dancer {key} has not been updated!')
+                    break
         self.dancer_sync_delay = (max(timings_list) - min(timings_list)) * 1000
-        eval_data = '#' + self.current_positions + '|' + action + '|' + str(self.dancer_sync_delay) + '|'
+        eval_data = '#' + self.current_positions + '|' + action + '|' + str(self.dancer_sync_delay)
         print('Sending the following message to Evaluation Server', eval_data)
         encrypted_message = self.encrypt_message(eval_data)
         
@@ -321,7 +347,6 @@ class Ultra96_Server(threading.Thread):
                 print('Received actual dancer position: ', dancer_positions)
                 self.actual_dance_positions = dancer_positions
                 break
-    
 
     '''
     Establish connection with database and send data over through 4 ports
@@ -436,86 +461,82 @@ class Ultra96_Server(threading.Thread):
 
                 # Only send information over to database once new data is ready and processed
                 elif self.dancer_1_send_packet and dancer_id == 1:
-                    while not self.dancer_1_data.empty():
-                        message = self.dancer_1_data.get()
+                    while not self.dancer_prediction_map[dancer_id-1].empty():
+                        message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
                         packet = packet_pb2.Packet(
                             dance_move = "Dab",
                             accuracy = message,
-                            #epoch_ms = int(self.dancer_1_offset)
                         )
                         packet.end = "\x7F"
-                        #packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
                         packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.dancer_1_send_packet = False
 
                 elif self.dancer_2_send_packet and dancer_id == 2:
-                    while not self.dancer_2_data.empty():
-                        message = self.dancer_2_data.get()
+                    while not self.dancer_prediction_map[dancer_id-1].empty():
+                        message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
                         packet = packet_pb2.Packet(
                             dance_move = "Mermaid",
                             accuracy = message,
-                            #epoch_ms = int(self.dancer_2_offset)
                         )
                         packet.end = "\x7F"
-                        #packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
                         packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.dancer_2_send_packet = False
 
                 elif self.dancer_3_send_packet and dancer_id == 3:
-                    while not self.dancer_3_data.empty():
-                        message = self.dancer_3_data.get()
+                    while not self.dancer_prediction_map[dancer_id-1].empty():
+                        message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
                         packet = packet_pb2.Packet(
                             dance_move = "James Bond",
                             accuracy = message,
-                            #epoch_ms = int(self.dancer_3_offset)
                         )
                         packet.end = "\x7F"
-                        #packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
                         packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.dancer_3_send_packet = False
             
     '''
-    Prediction funciton here that will integrate with SW1 (Ren Hao's ) code: Machine Learning 
+    Prediction funciton here that will integrate with SW1 (Ren Hao's) code: Machine Learning 
     '''
     def generate_predictions(self):
-        while True:
+        while True: # Remove later such that it only runs once when called
             if NUM_OF_DANCERS == 3:
                 if self.is_dancers_predicted[0] and self.is_dancers_predicted[1] and self.is_dancers_predicted[2]:
                     # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
                     if verbose:
                         print(' ')
                         print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
                         print(' ')
-                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
                     self.send_and_receive_eval_server('Dab')
                     self.is_dancers_predicted[0] = False
                     self.is_dancers_predicted[1] = False
                     self.is_dancers_predicted[2] = False
+                    #prediction = ren_hao_function()
+                    #return prediction
             elif NUM_OF_DANCERS == 2:
                 if self.is_dancers_predicted[0] and self.is_dancers_predicted[1]:
                     # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
                     if verbose:
                         print(' ')
                         print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
                         print(' ')
-                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
                     self.send_and_receive_eval_server('Dab')
                     self.is_dancers_predicted[0] = False
                     self.is_dancers_predicted[1] = False
             elif NUM_OF_DANCERS == 1:
                 if self.is_dancers_predicted[0]:
                     # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
                     if verbose:
                         print(' ')
                         print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
                         print(' ')
-                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
                     self.send_and_receive_eval_server('Dab')
                     self.is_dancers_predicted[0] = False
 
@@ -549,6 +570,32 @@ class Ultra96_Server(threading.Thread):
         encrypted_message = base64.b64encode(iv + cipher.encrypt(bytes(padded_message,FORMAT)))
         return encrypted_message
 
+    '''
+    Write data to logger for data collection
+    '''
+    def write_move_to_logger(self,packet_type,dancer_id,Ax,Ay,Az,Rx,Ry,Rz,start_flag,timestamp):
+        log_filepath = self.log_filepath
+        #pos_string = self.dancer_positions
+        if not os.path.exists(log_filepath): # first write
+            with open(log_filepath, 'w') as f:
+                self.df.to_csv(f, line_terminator = "\r")
+
+        with open(log_filepath, 'a') as f:
+            data = dict()
+            data['timestamp'] = timestamp
+            data['packet_type'] = packet_type
+            data['dancer_id'] = dancer_id
+            data['Ax'] = Ax
+            data['Ay'] = Ay
+            data['Az'] = Az
+            data['Rx'] = Rx
+            data['Ry'] = Ry
+            data['Rz'] = Rz
+            data['start_flag'] = start_flag
+            
+            self.df = pd.DataFrame(data, index=[0])[self.columns].set_index('timestamp')
+            self.df.to_csv(f, header=False, mode='a', line_terminator = "\r")
+
     def stop(self):
         for conn in self.laptop_connections:
             conn.close()
@@ -558,10 +605,6 @@ class Ultra96_Server(threading.Thread):
         self.socket.close()
         print('Ultra96 Server has shutdown.')
 
-    '''
-    ADDITIONAL CONNECTIONS AND CONDITIONS
-    '''
-    # if CONNECT_TO_EVAL_SERVER:
 
 def main(secret_key):
     global CONNECT_TO_DATABASE
@@ -570,7 +613,6 @@ def main(secret_key):
     global NUM_OF_DANCERS
 
     global DATA_COLLECTION_MODE
-
 
     u96_server = Ultra96_Server(IP_ADDR, PORT_NUM, GROUP_ID, secret_key)
     u96_server.start()
@@ -598,7 +640,7 @@ if __name__ == '__main__':
     print(f'Starting dance session with {NUM_OF_DANCERS} dancers! :-D')
     CONNECT_TO_DATABASE = args.connect_to_database
     CONNECT_TO_EVAL_SERVER = args.connect_to_eval_server
-    DATA_COLLECTION_MDOE = args.data_collection_mode
+    DATA_COLLECTION_MODE = args.data_collection_mode
 
     verbose = args.verbose
 

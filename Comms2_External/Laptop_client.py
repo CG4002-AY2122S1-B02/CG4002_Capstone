@@ -160,6 +160,7 @@ class Client():
             #emg_data = '#E|' + str(self.dancer_id) + '|emg'
             #emg_data = '#E|' + str(self.dancer_id) + '|225'
             self.send_data(raw_data)
+            print(f'Sending Raw Data to Ultra96 Server : {raw_data}')
             time.sleep(5)
         
 
