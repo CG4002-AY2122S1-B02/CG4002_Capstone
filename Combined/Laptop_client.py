@@ -160,7 +160,6 @@ class Client():
             #emg_data = '#E|' + str(self.dancer_id) + '|emg'
             #emg_data = '#E|' + str(self.dancer_id) + '|225'
             self.send_data(raw_data)
-            print(f'Sending Raw Data to Ultra96 Server : {raw_data}')
             time.sleep(5)
 
 
@@ -223,15 +222,14 @@ class Client():
     def stop(self):
         self.socket.close()
 
-def main():
-    if len(sys.argv) != 2:
-        print('Invalid number of arguments')
-        print('python Laptop_client.py [dancer_id]')
-        sys.exit()
+def main(dancer_id):
+    # if len(sys.argv) != 2:
+    #     print('Invalid number of arguments')
+    #     print('python Laptop_client.py [dancer_id]')
+    #     sys.exit()
 
-    dancer_id = int(sys.argv[1])
+    dancer_id = int(dancer_id)
     ip_addr = '127.0.0.1'
-    #port_num = PORT_NUMS[dancer_id-1]
     port_num = 8000
     group_id = GROUP_ID
     secret_key = SECRET_KEY
@@ -239,12 +237,6 @@ def main():
     my_client = Client(dancer_id, ip_addr, port_num, group_id, secret_key)
     my_client.run()
     my_client.wait_for_start()
-    #my_client.ntp_time_sync()
-    # Simulate sending data from Bluno for Testing
-    my_client.manage_bluno_data()
+    
+    return my_client
 
-    #my_client.stop()
-
-
-if __name__ == '__main__':
-    main()

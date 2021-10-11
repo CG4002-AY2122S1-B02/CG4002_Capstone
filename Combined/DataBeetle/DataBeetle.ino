@@ -18,7 +18,8 @@
 #define RESET_PACKET 'R'
 #define DATA_PACKET 'D'
 #define EMG_PACKET 'E'
-#define START_DANCE_PACKET 'S' // TODO yet to be implemented
+#define START_DANCE_PACKET 'S'
+#define NORMAL_DANCE_PACKET 'N'
 #define TIMESTAMP 'T'
 
 // * Time related global variables
@@ -57,15 +58,16 @@ double prevWindowAvgZ = 0;
 
 bool firstWindowDone = false;
 bool detectedMovement = false;
+bool firstDancePacket = false;
 int32_t lastDetectedMoveTime;
 
 // * Data related global variables
 int16_t accelX;
 int16_t accelY;
 int16_t accelZ;
-float rotX;
-float rotY;
-float rotZ;
+int16_t rotX;
+int16_t rotY;
+int16_t rotZ;
 
 // * Buffer related
 byte twoByteBuf[2];
@@ -142,9 +144,9 @@ void getAccValues() {
     accelY = aaReal.y;
     accelZ = aaReal.z;
 
-    rotX = ypr[0];
-    rotY = ypr[1];
-    rotZ = ypr[2];
+    rotX = (int) (ypr[0] * 10000);
+    rotY = (int) (ypr[1] * 10000);
+    rotZ = (int) (ypr[2] * 10000);
 
     // Replace the oldest value with the newest value in the next loop
     curr_frame = (curr_frame + 1) % 10;
@@ -177,6 +179,7 @@ void detectStartMove() {
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
 
             if (!detectedMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
+                firstDancePacket = true;
                 detectedMovement = true;
                 lastDetectedMoveTime = micros();
             }
@@ -263,22 +266,37 @@ void sendACKPacket(char packetType) {
     crc.restart(); // Restart crc caclulation
 }
 
-// * Total 20 bytes currently + 0 byte paddings
+// * Total 19 bytes currently + 1 byte paddings
 void sendDataPacket() {
 
     // One byte packet type and add to CRC
     Serial.write(DATA_PACKET);
     crc.add(DATA_PACKET);
 
-    // 6 bytes accelerometer, 12 bytes rotational (YPR)
+    // 6 bytes accelerometer, 6 bytes rotational (YPR)
     writeIntToSerial(accelX);
     writeIntToSerial(accelY);
     writeIntToSerial(accelZ);
-    writeFloatToSerial(rotX);
-    writeFloatToSerial(rotY);
-    writeFloatToSerial(rotZ);
+    writeIntToSerial(rotX);
+    writeIntToSerial(rotY);
+    writeIntToSerial(rotZ);
+
+    // 1 byte for start dance or normal dance packet
+    if (firstDancePacket) {
+        firstDancePacket = false;
+        Serial.write(START_DANCE_PACKET);
+        crc.add(START_DANCE_PACKET);
+    } else {
+        Serial.write(NORMAL_DANCE_PACKET);
+        crc.add(NORMAL_DANCE_PACKET);
+    }
+
+    // 4 bytes timestamp data
+    writeLongToSerial(currentTime);
 
     Serial.write(crc.getCRC()); // One byte checksum
+
+    padPacket(1);
 
     crc.restart();
 }
@@ -370,6 +388,7 @@ void loop() {
                 break;
             case ACK_PACKET:
                 // Received last ACK from laptop. Handshake complete
+                Serial.flush();
                 if (handshakeStart) {
                     handshakeStart = false;
                     handshakeEnd = true;
