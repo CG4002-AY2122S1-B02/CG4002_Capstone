@@ -194,10 +194,11 @@ class Delegate(DefaultDelegate):
             dataList = [self.Trial_Num] + list(parsed_data[1: -3])
             List_Of_Data.append(dataList)
 
+            print("#DEBUG#: Formatted packet: " + ' '.join(map(str, dataList)))
+
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1]))
 
-        logging.info("#DEBUG#: Formatted packet %s" % reformatted_data)
         return reformatted_data
 
 
