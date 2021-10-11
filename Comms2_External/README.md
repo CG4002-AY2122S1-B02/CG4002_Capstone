@@ -1,17 +1,44 @@
 # External Comms
 
 ## Instruction
-- `eval_client.py` runs on Ultra96 and sends data to evaluation server
+- `Ultra96_db_server.py` runs on Ultra96 and will handle connections to Laptop, Eval Server and Dashboard
+
+## Production/Testing Steps
+1. Start the Evaluation Server Script
+'''
+e.g. python3 eval_server.py <IP Address> <Port Number> <Group Number> 
+'''
+2. Start the Ultra96_db_server.py Script with the following arguments
+- -n <Int> | --num-of-dancers <Int>
+- -E | --connect_to_eval_server
+- -D | --connect_to_database
+- -C | --data_collection_mode
+- -V | --verbose
+'''
+e.g. python3 Ultra96_db_server.py -n 1 -E -D -C -V
+'''
+3. Run the connection.py scripts on each of the dancers laptops
+'''
+e.g. python3 connection.py -id 1 --fake-data
+python3 connection.py -id 1
+python3 connection.py -id 2
+python3 connection.py -id 3
+'''
+4. Create connections to database by running binary on remote database laptop
+'''
+./dashboard_server_macos
+npm start
+'''
 
 ## Access Ultra96
 1. You need to SSH into sunfire
 ```
-ssh -l <nusnet_id>@sunfire.comp.nus.edu.sg 
+ssh <nusnet_id>@sunfire.comp.nus.edu.sg 
 ```
 2. From Sunfire, you can access the board
 ```
-ssh -l xilinx <IP address of your group's board>
-2 makerslab-fpga-02 137.132.86.225
+ssh xilinx@<IP address of your group's board>
+Board Details: 2 makerslab-fpga-02 137.132.86.225
 ```
 
 ### Examples

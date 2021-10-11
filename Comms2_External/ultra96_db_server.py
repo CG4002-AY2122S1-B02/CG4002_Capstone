@@ -22,6 +22,9 @@ from Crypto.Cipher import AES
 MAX_DB_CONNECTIONS = 4
 BLUNO_PER_LAPTOP = 1
 NUM_OF_DANCERS = 3
+WEEK = 11
+ACTIONS = ['mermaid', 'jamesbond', 'dab']
+POSITIONS = ['1 2 3', '3 2 1', '2 3 1', '3 1 2', '1 3 2', '2 1 3']
 
 # Assign the host and port numbers of our Ultra96 Server 
 IP_ADDR = '127.0.0.1'
@@ -50,6 +53,7 @@ CONNECT_TO_EVAL_SERVER = False
 DATA_COLLECTION_MODE = False
 LOG_DIR = os.path.join(os.path.dirname(__file__), 'test_run_logs')
 
+# For Week 9
 position_stream_test = [
     packet_pb2.Position(
         position="123"
@@ -222,8 +226,6 @@ class Ultra96_Server(threading.Thread):
                         packet_type = messages[0]
                         dancer_id = int(messages[1])
                         if verbose:
-                            print(' ')
-                            print('Dancer Id: ', dancer_id)
                             print('Received message: ', decrypted_message)                       
 
                         if 'T' in packet_type: # Time Sync Packet
@@ -259,10 +261,11 @@ class Ultra96_Server(threading.Thread):
                                         self.start_time_map_dancers[dancer_id] = float(timestamp)
                                         self.is_dancers_predicted[dancer_id-1] = bool(True)
                                         if verbose:
-                                            print(f'Start of first move detected from dancer {dancer_id}!')
+                                            print(f'Start of move detected from dancer {dancer_id}!')
                                     else:
                                         # Store the start timestamp of the dance move as well
                                         self.start_time_map_dancers[dancer_id] = float(timestamp)  
+                                        print(f'Start of move detected from dancer {dancer_id}!')
 
                             # TO-DO: Store data in Global Queue for each dancer
                             # When there is a certain amount of data collected, call ML function for prediction
@@ -324,7 +327,11 @@ class Ultra96_Server(threading.Thread):
                     print(f'The start timing for dancer {key} has not been updated!')
                     break
         self.dancer_sync_delay = (max(timings_list) - min(timings_list)) * 1000
-        eval_data = '#' + self.current_positions + '|' + action + '|' + str(self.dancer_sync_delay)
+        self.current_positions = random.choice(POSITIONS) # For Week 9 fake random positions
+        if WEEK == 9:
+            eval_data = '#' + self.current_positions + '|' + action + '|' + str(0) # No Sync Delay
+        else:
+            eval_data = '#' + self.current_positions + '|' + action + '|' + str(self.dancer_sync_delay)
         print('Sending the following message to Evaluation Server', eval_data)
         encrypted_message = self.encrypt_message(eval_data)
         
@@ -343,9 +350,8 @@ class Ultra96_Server(threading.Thread):
         while True:
             data = self.eval_server_socket.recv(1024)
             if data:
-                dancer_positions = data.decode(FORMAT)
-                print('Received actual dancer position: ', dancer_positions)
-                self.actual_dance_positions = dancer_positions
+                self.actual_dance_positions = data.decode(FORMAT)
+                print('Received actual dancer position: ', self.actual_dance_positions)
                 break
 
     '''
@@ -609,9 +615,7 @@ class Ultra96_Server(threading.Thread):
 def main(secret_key):
     global CONNECT_TO_DATABASE
     global CONNECT_TO_EVAL_SERVER
-
     global NUM_OF_DANCERS
-
     global DATA_COLLECTION_MODE
 
     u96_server = Ultra96_Server(IP_ADDR, PORT_NUM, GROUP_ID, secret_key)
