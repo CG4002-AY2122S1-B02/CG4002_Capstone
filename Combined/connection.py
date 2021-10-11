@@ -26,8 +26,8 @@ BLE_CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
 
 # * Mac Addresses of Bluno Beetles
-BEETLE_1 = 'b0:b1:13:2d:b4:02'
-BEETLE_2 = 'b0:b1:13:2d:d3:58'
+BEETLE_1 = 'b0:b1:13:2d:d3:58'
+BEETLE_2 = 'b0:b1:13:2d:b4:02'
 BEETLE_3 = 'b0:b1:13:2d:b4:01'
 ALL_BEETLE_MAC = [BEETLE_3]
 
@@ -79,6 +79,7 @@ class Delegate(DefaultDelegate):
         self.mac_addr = mac_addr
         self.dancer_id = dancer_id
         self.buffer = b''
+        self.start_of_arduino_timestamp = 0
 
     # * Handles incoming packets from serial comms
     def handleNotification(self, cHandle, data):
@@ -158,8 +159,10 @@ class Delegate(DefaultDelegate):
 
         # Received ACK packet
         elif (self.buffer[0] == 65):
-            # 'A', CRC8
-            self.buffer = self.buffer[2:]
+            # 'A', Timestamp, CRC8
+            parsed_packet_data = struct.unpack('!cLc', self.buffer[0:6])
+            self.buffer = self.buffer[6:]
+            self.start_of_arduino_timestamp = time() * 1000 - parsed_packet_data[1]
             BEETLE_HANDSHAKE_STATUS[self.mac_addr] = True
             logging.info('#DEBUG#: Received ACK packet from %s' %
                          self.mac_addr)
@@ -180,7 +183,8 @@ class Delegate(DefaultDelegate):
         if (parsed_data[0] == b'D'):
             # Add start of dance + Timestamp
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -3]))
-            reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(parsed_data[8]) + "|"
+            current_epoch_timestamp = self.start_of_arduino_timestamp + parsed_data[8]
+            reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(current_epoch_timestamp) + "|"
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1]))
 
@@ -217,7 +221,7 @@ class BeetleThread():
 
                 # May be a case of faulty handshake.
                 # Beetle think handshake has completed but laptop doesn't
-                if counter % 20 == 0:
+                if counter % 5 == 0:
                     logging.info(
                         "Too many H packets sent. Arduino may be out of state. Resetting Beetle")
                     self.reset()
