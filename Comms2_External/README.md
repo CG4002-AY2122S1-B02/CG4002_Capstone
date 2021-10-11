@@ -11,7 +11,7 @@ e.g. python3 eval_server.py <IP Address> <Port Number> <Group Number>
 2. Start the Ultra96_db_server.py Script with the following arguments
 - -n <Int> | --num-of-dancers <Int>
 - -E | --connect_to_eval_server
-- -D | --connect_to_database
+- -D | --connect_to_dashboard
 - -C | --data_collection_mode
 - -V | --verbose
 ```
@@ -24,7 +24,7 @@ python3 connection.py -id 1
 python3 connection.py -id 2
 python3 connection.py -id 3
 ```
-4. Create connections to database by running binary on remote database laptop
+4. Create connections to database by running binary on remote dashboard laptop
 ```
 ./dashboard_server_macos
 npm start

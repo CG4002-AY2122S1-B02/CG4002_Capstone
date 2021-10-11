@@ -43,8 +43,8 @@ BLOCK_SIZE = 16
 PADDING = ' '
 FORMAT = "utf8"
 
-# By default set to False. Specify '-D' while running script to connect to database server.
-CONNECT_TO_DATABASE = False
+# By default set to False. Specify '-D' while running script to connect to dashboard server.
+CONNECT_TO_DASHBOARD = False
 
 # By default set to False. Specify '-E' while running script to connect to eval server.
 CONNECT_TO_EVAL_SERVER = False
@@ -74,6 +74,28 @@ position_stream_test = [
         position="132"
     ),
 ]
+
+PREDICTION_MAP = {
+    0 : "mermaid",
+    1 : "jamesbond",
+    2 : "dab",
+    3 : "window360",
+    4 : "cowboy",
+    5 : "scarecrow",
+    6 : "pushback",
+    7 : "snake"
+}
+
+PREDICTION_MAP_DASHBOARD = {
+    0 : "Mermaid",
+    1 : "James Bond",
+    2 : "Dab",
+    3 : "Window360",
+    4 : "Cowboy",
+    5 : "Scarecrow",
+    6 : "Push Back",
+    7 : "Snake"
+}
 
 # Different Packet Types
 HELLO = 'H'
@@ -129,7 +151,7 @@ class Ultra96_Server(threading.Thread):
         self.dancer_2_position_data = Queue()
         self.dancer_3_position_data = Queue()
 
-        self.dancer_prediction_map = {} # Used to send data to database
+        self.dancer_prediction_map = {} # Used to send data to dashboard
         self.dancer_prediction_map[0] = Queue() 
         self.dancer_prediction_map[1] = Queue()  
         self.dancer_prediction_map[2] = Queue()          
@@ -138,14 +160,14 @@ class Ultra96_Server(threading.Thread):
         self.laptop_connections = []
         self.laptops_connected = False
         self.db_connections = []
-        self.database_connected = False
+        self.dashboard_connected = False
         self.start_evaluation = False
 
-        self.dancer_1_send_position = False # Used to send data to database
+        self.dancer_1_send_position = False # Used to send data to dashboard
         self.dancer_2_send_position = False
         self.dancer_3_send_position = False
 
-        self.dancer_1_send_packet = False # Used to send data to database
+        self.dancer_1_send_packet = False # Used to send data to dashboard
         self.dancer_2_send_packet = False
         self.dancer_3_send_packet = False
 
@@ -164,9 +186,9 @@ class Ultra96_Server(threading.Thread):
             self.prediction_thread.daemon = True
             self.prediction_thread.start()
 
-        # Sequence 4: Create connections to database
-        if CONNECT_TO_DATABASE:
-            self.setup_connection_to_database()
+        # Sequence 4: Create connections to dashboard
+        if CONNECT_TO_DASHBOARD:
+            self.setup_connection_to_dashboard()
 
         # Set up data collection logger
         if DATA_COLLECTION_MODE:
@@ -355,10 +377,10 @@ class Ultra96_Server(threading.Thread):
                 break
 
     '''
-    Establish connection with database and send data over through 4 ports
+    Establish connection with dashboard and send data over through 4 ports
     Creates one socket for each connection coming from laptop
     '''
-    def setup_connection_to_database(self):
+    def setup_connection_to_dashboard(self):
         # Create a TCP/IP socket and bind to port
         self.socket1 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -388,59 +410,59 @@ class Ultra96_Server(threading.Thread):
         while True:
             # Connection to receive general dancer positions
             conn1, db_addr1 = self.socket1.accept()
-            db_thread1 = threading.Thread(target=self.send_data_to_database, args=(conn1,db_addr1,0))
+            db_thread1 = threading.Thread(target=self.send_data_to_dashboard, args=(conn1,db_addr1,0))
             self.db_connections.append(conn1)
             db_thread1.daemon = True
             db_thread1.start()
             print(f'Connection from {db_addr1} has been establised')
             if verbose: 
-                print('Number of database connections: ' + str(len(self.db_connections)))
+                print('Number of dashboard connections: ' + str(len(self.db_connections)))
             # Connection to receive dancer 1 packet information
             conn2, db_addr2 = self.socket2.accept()
-            db_thread2 = threading.Thread(target=self.send_data_to_database, args=(conn2,db_addr2,1))
+            db_thread2 = threading.Thread(target=self.send_data_to_dashboard, args=(conn2,db_addr2,1))
             self.db_connections.append(conn2)
             db_thread2.daemon = True
             db_thread2.start()
             print(f'Connection from {db_addr2} has been establised')
             if verbose: 
-                print('Number of database connections: ' + str(len(self.db_connections)))
+                print('Number of dashboard connections: ' + str(len(self.db_connections)))
             # Connection to receive dancer 2 packet information
             conn3, db_addr3 = self.socket3.accept()
-            db_thread3 = threading.Thread(target=self.send_data_to_database, args=(conn3,db_addr3,2))
+            db_thread3 = threading.Thread(target=self.send_data_to_dashboard, args=(conn3,db_addr3,2))
             self.db_connections.append(conn3)
             db_thread3.daemon = True
             db_thread3.start()
             print(f'Connection from {db_addr3} has been establised')
             if verbose: 
-                print('Number of database connections: ' + str(len(self.db_connections)))
+                print('Number of dashboard connections: ' + str(len(self.db_connections)))
             # Connection to receive dancer 3 packet information
             conn4, db_addr4 = self.socket4.accept()
-            db_thread4 = threading.Thread(target=self.send_data_to_database, args=(conn4,db_addr4,3))
+            db_thread4 = threading.Thread(target=self.send_data_to_dashboard, args=(conn4,db_addr4,3))
             self.db_connections.append(conn4)
             db_thread4.daemon = True
             db_thread4.start()
             print(f'Connection from {db_addr4} has been establised')
             if verbose: 
-                print('Number of database connections: ' + str(len(self.db_connections)))
+                print('Number of dashboard connections: ' + str(len(self.db_connections)))
 
             if len(self.db_connections) == MAX_DB_CONNECTIONS:
-                    self.database_connected = True
+                    self.dashboard_connected = True
                     print('The maximum number of db connections has been reached')
                     break
 
     def send_start_flag_to_laptops(self):
         # Send start flag to all dancers to tell them start sending data
         if self.laptops_connected:
-            if CONNECT_TO_DATABASE:
-                if self.database_connected:
-                    # Wait for all laptops to connect and database to establish connection
+            if CONNECT_TO_DASHBOARD:
+                if self.dashboard_connected:
+                    # Wait for all laptops to connect and dashboard to establish connection
                     for conn in self.laptop_connections:
                         encrypted_message = self.encrypt_message('#S|')
                         conn.sendall(encrypted_message)
                     self.start_evaluation = True
                     print('Evaluation will begin now! :-)')
             else:
-                # If database is not connected, just wait for all laptops to establish connection
+                # If dashboard is not connected, just wait for all laptops to establish connection
                 for conn in self.laptop_connections:
                     encrypted_message = self.encrypt_message('#S|')
                     conn.sendall(encrypted_message)
@@ -450,7 +472,7 @@ class Ultra96_Server(threading.Thread):
     '''
     Run function that will be constantly checking for data and sending over to dashboard server
     '''
-    def send_data_to_database(self,conn,addr,dancer_id):
+    def send_data_to_dashboard(self,conn,addr,dancer_id):
         while not self.shutdown.is_set():
             if self.start_evaluation:
                 packet = {}
@@ -465,7 +487,7 @@ class Ultra96_Server(threading.Thread):
                     conn.sendall(packet.SerializeToString())
                     time.sleep(3)
 
-                # Only send information over to database once new data is ready and processed
+                # Only send information over to dashboard once new data is ready and processed
                 elif self.dancer_1_send_packet and dancer_id == 1:
                     while not self.dancer_prediction_map[dancer_id-1].empty():
                         message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
@@ -613,14 +635,14 @@ class Ultra96_Server(threading.Thread):
 
 
 def main(secret_key):
-    global CONNECT_TO_DATABASE
+    global CONNECT_TO_DASHBOARD
     global CONNECT_TO_EVAL_SERVER
     global NUM_OF_DANCERS
     global DATA_COLLECTION_MODE
 
     u96_server = Ultra96_Server(IP_ADDR, PORT_NUM, GROUP_ID, secret_key)
     u96_server.start()
-    print('Waiting 60s for laptop, eval server & database connections to complete!')
+    print('Waiting 60s for laptop, eval server & dashboard connections to complete!')
     time.sleep(60)
     u96_server.send_start_flag_to_laptops()
 
@@ -632,7 +654,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Ultra96 Server set-up for Laptops to connect")
     parser.add_argument('-s', '--secret_key', metavar='', default='cg40024002group2', help='secret key')
     parser.add_argument('-n', '--num_of_dancers', type=int, required=True, help='num_of_dancers')
-    parser.add_argument('-D', '--connect_to_database', default=False, action='store_true', help='connect_to_database')
+    parser.add_argument('-D', '--connect_to_dashboard', default=False, action='store_true', help='connect_to_dashboard')
     parser.add_argument('-E', '--connect_to_eval_server', default=False, action='store_true', help='connect_to_eval_server')
     parser.add_argument('-C', '--data_collection_mode', default=False, action='store_true', help='data_collection_mode')
     parser.add_argument('-V', '--verbose', default=False, action='store_true', help='verbose')
@@ -642,7 +664,7 @@ if __name__ == '__main__':
     secret_key = args.secret_key
     NUM_OF_DANCERS = args.num_of_dancers
     print(f'Starting dance session with {NUM_OF_DANCERS} dancers! :-D')
-    CONNECT_TO_DATABASE = args.connect_to_database
+    CONNECT_TO_DASHBOARD = args.connect_to_dashboard
     CONNECT_TO_EVAL_SERVER = args.connect_to_eval_server
     DATA_COLLECTION_MODE = args.data_collection_mode
 
