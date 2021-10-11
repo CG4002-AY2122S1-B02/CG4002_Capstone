@@ -5,30 +5,30 @@
 
 ## Production/Testing Steps
 1. Start the Evaluation Server Script
-'''
+```
 e.g. python3 eval_server.py <IP Address> <Port Number> <Group Number> 
-'''
+```
 2. Start the Ultra96_db_server.py Script with the following arguments
 - -n <Int> | --num-of-dancers <Int>
 - -E | --connect_to_eval_server
 - -D | --connect_to_database
 - -C | --data_collection_mode
 - -V | --verbose
-'''
+```
 e.g. python3 Ultra96_db_server.py -n 1 -E -D -C -V
-'''
+```
 3. Run the connection.py scripts on each of the dancers laptops
-'''
+```
 e.g. python3 connection.py -id 1 --fake-data
 python3 connection.py -id 1
 python3 connection.py -id 2
 python3 connection.py -id 3
-'''
+```
 4. Create connections to database by running binary on remote database laptop
-'''
+```
 ./dashboard_server_macos
 npm start
-'''
+```
 
 ## Access Ultra96
 1. You need to SSH into sunfire
