@@ -96,7 +96,7 @@ class Client():
                 print('Still waiting for one of the dancers T.T !!!')
 
     def run(self):
-        #self.start_ssh_tunnel()
+        self.start_ssh_tunnel()
         server_address = (self.ip_addr, self.port_num) # Start on local socket [8001,8002,8003]
         print('Trying to connect to %s port %s' % server_address)
         try:
@@ -160,6 +160,7 @@ class Client():
             #emg_data = '#E|' + str(self.dancer_id) + '|emg'
             #emg_data = '#E|' + str(self.dancer_id) + '|225'
             self.send_data(raw_data)
+            print(f'Sending Raw Data to Ultra96 Server : {raw_data}')
             time.sleep(5)
 
 
@@ -230,13 +231,14 @@ def main(dancer_id):
 
     dancer_id = int(dancer_id)
     ip_addr = '127.0.0.1'
-    port_num = 8000
+    port_num = PORT_NUMS[dancer_id-1]
+    # port_num = 8000
     group_id = GROUP_ID
     secret_key = SECRET_KEY
 
     my_client = Client(dancer_id, ip_addr, port_num, group_id, secret_key)
     my_client.run()
     my_client.wait_for_start()
-    
+
     return my_client
 
