@@ -73,7 +73,7 @@ ply==3.11
 prompt-toolkit==1.0.15
 protobuf==3.18.1
 psutil==5.7.0
-py==1.5.2
+py==1.10.0
 pybind11==2.5.0
 pycparser==2.18
 pycrypto==2.6.1
