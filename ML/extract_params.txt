@@ -1,0 +1,77 @@
+def print_conv_kernel(np_arr):
+    # Conv Layer (Kernel)
+    print("{")
+    first_3 = True
+    for filter in np_arr:
+        if first_3 == False:
+            print(",", end="")
+        first_3 = False
+        print("{",end="")
+        first = True
+        for row in filter:
+            if first == False:
+                print(",", end="")
+            print("{" , end="")
+            first = False
+
+            first_2 = True
+            for val in row:
+                if first_2 == False:
+                    print(",", end="")
+                print(val , end="")
+                first_2 = False
+            print("}")
+        print("}")
+        print()
+    print("};")
+
+def print_dense_layer_kernel(np_arr):
+    # Dense Layer (Kernel)
+    print("{")
+    first_3 = True
+    for filter in np_arr:
+        if first_3 == False:
+            print(",", end="")
+        first_3 = False
+        print("{",end="")
+        first_2 = True
+        for val in filter:
+            if first_2 == False:
+                print(",", end="")
+            print(val , end="")
+            first_2 = False
+        print("}")
+    print("};")
+    
+def print_bias(np_arr):
+    # Bias (both conv & dense)
+    print("{",end="")
+    first = True
+    for val in np_arr:
+        if first == False:
+            print(",",end="")
+        first = False
+        print(val,end="")
+    print("};")
+
+# Extract Conv Layer Weights
+# Conv Layer 1
+print_conv_kernel(model.trainable_weights[0].numpy())
+print_bias(model.trainable_weights[1].numpy())
+
+# Conv Layer 2
+print_conv_kernel(model.trainable_weights[2].numpy())
+print_bias(model.trainable_weights[3].numpy())
+
+# Conv Layer 3
+print_conv_kernel(model.trainable_weights[4].numpy())
+print_bias(model.trainable_weights[5].numpy())
+
+# Extract Dense Layer Weights
+# Dense Layer 1
+print_dense_layer_kernel(model.trainable_weights[6].numpy())
+print_bias(model.trainable_weights[7].numpy())
+
+# Dense Layer 2
+print_dense_layer_kernel(model.trainable_weights[8].numpy())
+print_bias(model.trainable_weights[9].numpy())
