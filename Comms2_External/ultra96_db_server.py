@@ -9,10 +9,11 @@ import time
 import base64
 import random
 from multiprocessing import Process,Queue,Pipe
+from collections import deque
 from queue import Queue
 
 import packet_pb2
-import math_loser
+#import math_loser
 import pandas as pd
 
 from Crypto import Random
@@ -22,7 +23,7 @@ from Crypto.Cipher import AES
 MAX_DB_CONNECTIONS = 4
 BLUNO_PER_LAPTOP = 1
 NUM_OF_DANCERS = 3
-WEEK = 11
+WEEK = 9
 ACTIONS = ['mermaid', 'jamesbond', 'dab']
 POSITIONS = ['1 2 3', '3 2 1', '2 3 1', '3 1 2', '1 3 2', '2 1 3']
 
@@ -137,8 +138,7 @@ class Ultra96_Server(threading.Thread):
             2 : -1,
             3 : -1
         }
-
-        # Data Structures to store raw data from dancers
+        
         self.dancer_data_map = {}
         self.dancer_data_map[0] = Queue()
         self.dancer_data_map[1] = Queue()
@@ -167,9 +167,11 @@ class Ultra96_Server(threading.Thread):
         self.dancer_2_send_position = False
         self.dancer_3_send_position = False
 
-        self.dancer_1_send_packet = False # Used to send data to dashboard
-        self.dancer_2_send_packet = False
-        self.dancer_3_send_packet = False
+        self.is_send_dashboard = { # Used to send data to dashboard
+            1 : False,
+            2 : False,
+            3 : False
+        }
 
         self.is_dancers_predicted = [False,False,False] # Used for predictions
 
@@ -272,7 +274,7 @@ class Ultra96_Server(threading.Thread):
                             Ry = messages[6]
                             Rz = messages[7]
                             start_flag = messages[8] # S | N
-                            timestamp = messages[9] # Currently (e.g. 734823 / 686270)
+                            timestamp = str(float(messages[9])/1000) # Millis format -> But expecting it in seconds
 
                             self.write_move_to_logger(packet_type,str(dancer_id),Ax,Ay,Az,Rx,Ry,Rz,start_flag,timestamp)
 
@@ -280,31 +282,60 @@ class Ultra96_Server(threading.Thread):
                             if start_flag == 'S':
                                 if dancer_id in self.start_time_map_dancers:
                                     if self.start_time_map_dancers[dancer_id] == -1:
+                                        # Store the start timestamp of the dance move
                                         self.start_time_map_dancers[dancer_id] = float(timestamp)
                                         self.is_dancers_predicted[dancer_id-1] = bool(True)
                                         if verbose:
                                             print(f'Start of move detected from dancer {dancer_id}!')
                                     else:
-                                        # Store the start timestamp of the dance move as well
-                                        self.start_time_map_dancers[dancer_id] = float(timestamp)  
-                                        print(f'Start of move detected from dancer {dancer_id}!')
+                                        # Store the start timestamp of the dance move as well (Just-In-Case)
+                                        self.start_time_map_dancers[dancer_id] = float(timestamp)
+                                        if verbose:
+                                            print(f'Start of move detected from dancer {dancer_id}!')  
 
                             # TO-DO: Store data in Global Queue for each dancer
                             # When there is a certain amount of data collected, call ML function for prediction
-                            if dancer_id == 1:
                                 # 1. Put data into queue
                                 # 2. Check for queue size
-                                # 3. If queue size == 40 (Means at 20hz, 2 seconds have passed, and 40 samples have been collected)
+                                # 3. If queue size == 80 (Means at 20hz, min of 4 seconds have passed, and 80 samples have been collected)
                                 # 4. Call ML function and clear the queue
                                 # 5. Set dancer predicted to true (self.is_dancers_predicted[dancer_id-1] = True)
-                                self.dancer_1_send_packet = True
-                                self.dancer_prediction_map[dancer_id-1].put(float(1))
+                            
+                            data_row = [Ax,Ay,Az,Rx,Ry,Rz]
+                            self.dancer_data_map[dancer_id-1].put(data_row)
+                            #self.dancer_data_counter[dancer_id] += 1
+
+                            if dancer_id == 1:
+                                if self.dancer_data_map[dancer_id-1].qsize() == 5: # Wait for 80 samples before calling
+                                    prediction_list  = []
+                                    for i in range(5):
+                                        data_row = self.dancer_data_map[dancer_id-1].get()
+                                        prediction_list.append(data_row)
+                                    prediction_df = pd.DataFrame(prediction_list)
+                                    print(prediction_df)
+                                    # prediction = Call ML Function here (prediction_df)
+                                    self.is_send_dashboard[dancer_id] = True
+                                    self.dancer_prediction_map[dancer_id-1].put(float(1)) # Eventually need to store a tuple (predicted move + accuracy)
                             elif dancer_id == 2:
-                                self.dancer_2_send_packet = True
-                                self.dancer_prediction_map[dancer_id-1].put(float(2))
+                                if self.dancer_data_map[dancer_id-1].qsize() == 80: # Wait for 80 samples before calling
+                                    prediction_list  = []
+                                    for i in range(80):
+                                        data_row = self.dancer_data_map[dancer_id-1].get()
+                                        prediction_list.append(data_row)
+                                    prediction_df = pd.DataFrame(prediction_list)
+                                    # prediction = Call ML Function here (prediction_df)
+                                    self.is_send_dashboard[dancer_id] = True
+                                    self.dancer_prediction_map[dancer_id-1].put(float(1)) # Eventually need to store a tuple (predicted move + accuracy)
                             elif dancer_id == 3:
-                                self.dancer_3_send_packet = True
-                                self.dancer_prediction_map[dancer_id-1].put(float(3))
+                                if self.dancer_data_map[dancer_id-1].qsize() == 80: # Wait for 80 samples before calling
+                                    prediction_list  = []
+                                    for i in range(80):
+                                        data_row = self.dancer_data_map[dancer_id-1].get()
+                                        prediction_list.append(data_row)
+                                    prediction_df = pd.DataFrame(prediction_list)
+                                    # prediction = Call ML Function here (prediction_df)
+                                    self.is_send_dashboard[dancer_id] = True
+                                    self.dancer_prediction_map[dancer_id-1].put(float(1)) # Eventually need to store a tuple (predicted move + accuracy)
 
                     except Exception as e:
                         print(e)
@@ -485,10 +516,10 @@ class Ultra96_Server(threading.Thread):
                     packet.epoch_ms = int(time.time() * 1000 + random.randint(0,1000))
                     print('Sending data to db via port: ' + str(addr[1]))
                     conn.sendall(packet.SerializeToString())
-                    time.sleep(3)
+                    time.sleep(5)
 
                 # Only send information over to dashboard once new data is ready and processed
-                elif self.dancer_1_send_packet and dancer_id == 1:
+                elif self.is_send_dashboard[dancer_id] and dancer_id == 1:
                     while not self.dancer_prediction_map[dancer_id-1].empty():
                         message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
                         packet = packet_pb2.Packet(
@@ -499,9 +530,9 @@ class Ultra96_Server(threading.Thread):
                         packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
-                        self.dancer_1_send_packet = False
+                        self.is_send_dashboard[dancer_id] = False
 
-                elif self.dancer_2_send_packet and dancer_id == 2:
+                elif self.is_send_dashboard[dancer_id] and dancer_id == 2:
                     while not self.dancer_prediction_map[dancer_id-1].empty():
                         message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
                         packet = packet_pb2.Packet(
@@ -512,9 +543,9 @@ class Ultra96_Server(threading.Thread):
                         packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
-                        self.dancer_2_send_packet = False
+                        self.is_send_dashboard[dancer_id] = False
 
-                elif self.dancer_3_send_packet and dancer_id == 3:
+                elif self.is_send_dashboard[dancer_id] and dancer_id == 3:
                     while not self.dancer_prediction_map[dancer_id-1].empty():
                         message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
                         packet = packet_pb2.Packet(
@@ -525,7 +556,7 @@ class Ultra96_Server(threading.Thread):
                         packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
-                        self.dancer_3_send_packet = False
+                        self.is_send_dashboard[dancer_id] = False
             
     '''
     Prediction funciton here that will integrate with SW1 (Ren Hao's) code: Machine Learning 
