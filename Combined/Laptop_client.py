@@ -120,6 +120,7 @@ class Client():
         aes_key = bytes(str(self.secret_key), encoding=FORMAT)
         cipher = AES.new(aes_key, AES.MODE_CBC, iv)
         encrypted_message = base64.b64encode(iv + cipher.encrypt(bytes(padded_message,FORMAT)))
+        encrypted_message = encrypted_message.ljust(256, b' ')
         return encrypted_message
 
     def decrypt_message(self, cipher_text):
