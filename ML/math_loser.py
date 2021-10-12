@@ -45,4 +45,4 @@ if __name__ == '__main__':
     _input_data = _input_data.astype('float32')
     print(f"shape of the input we passed in initially is {_input_data.shape}")
     print(f"type of the input we passed in is {_input_data.dtype}")
-    pred = math_loser(_input_data, 'boing_cnn_tflite.tflite')
+    pred = math_loser(_input_data, 'boing_cnn_tflite_80.tflite')

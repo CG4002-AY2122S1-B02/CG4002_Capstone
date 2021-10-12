@@ -13,8 +13,9 @@ from collections import deque
 from queue import Queue
 
 import packet_pb2
-#import math_loser
+import math_loser
 import pandas as pd
+import numpy as np
 
 from Crypto import Random
 from Crypto.Cipher import AES
@@ -151,6 +152,11 @@ class Ultra96_Server(threading.Thread):
         self.dancer_2_position_data = Queue()
         self.dancer_3_position_data = Queue()
 
+        self.dancer_prediction_map_eval = {} # Used to send data to eval server
+        self.dancer_prediction_map_eval[0] = Queue()
+        self.dancer_prediction_map_eval[1] = Queue()
+        self.dancer_prediction_map_eval[2] = Queue()
+
         self.dancer_prediction_map = {} # Used to send data to dashboard
         self.dancer_prediction_map[0] = Queue() 
         self.dancer_prediction_map[1] = Queue()  
@@ -173,7 +179,11 @@ class Ultra96_Server(threading.Thread):
             3 : False
         }
 
-        self.is_dancers_predicted = [False,False,False] # Used for predictions
+        self.is_dancers_predicted = { # Used for predictions
+            1 : False,
+            2 : False,
+            3 : False
+        } 
 
         # Sequence 0: Start the Evaluation Server
         # Sequence 1: Start this Ultra96_db_server.py Script
@@ -184,7 +194,7 @@ class Ultra96_Server(threading.Thread):
         if CONNECT_TO_EVAL_SERVER:
             self.setup_connection_to_eval_server()
 
-            self.prediction_thread = threading.Thread(target=self.generate_predictions)
+            self.prediction_thread = threading.Thread(target=self.check_prediction_status)
             self.prediction_thread.daemon = True
             self.prediction_thread.start()
 
@@ -284,7 +294,6 @@ class Ultra96_Server(threading.Thread):
                                     if self.start_time_map_dancers[dancer_id] == -1:
                                         # Store the start timestamp of the dance move
                                         self.start_time_map_dancers[dancer_id] = float(timestamp)
-                                        self.is_dancers_predicted[dancer_id-1] = bool(True)
                                         if verbose:
                                             print(f'Start of move detected from dancer {dancer_id}!')
                                     else:
@@ -304,37 +313,16 @@ class Ultra96_Server(threading.Thread):
                             data_row = [Ax,Ay,Az,Rx,Ry,Rz]
                             self.dancer_data_map[dancer_id-1].put(data_row)
 
-                            if dancer_id == 1:
-                                if self.dancer_data_map[dancer_id-1].qsize() == 5: # Wait for 80 samples before calling
-                                    prediction_list  = []
-                                    for i in range(5):
-                                        data_row = self.dancer_data_map[dancer_id-1].get()
-                                        prediction_list.append(data_row)
-                                    prediction_df = pd.DataFrame(prediction_list)
-                                    print(prediction_df)
-                                    # prediction = Call ML Function here (prediction_df)
-                                    self.is_send_dashboard[dancer_id] = True
-                                    self.dancer_prediction_map[dancer_id-1].put(float(1)) # Eventually need to store a tuple (predicted move + accuracy)
-                            elif dancer_id == 2:
-                                if self.dancer_data_map[dancer_id-1].qsize() == 80: # Wait for 80 samples before calling
-                                    prediction_list  = []
-                                    for i in range(80):
-                                        data_row = self.dancer_data_map[dancer_id-1].get()
-                                        prediction_list.append(data_row)
-                                    prediction_df = pd.DataFrame(prediction_list)
-                                    # prediction = Call ML Function here (prediction_df)
-                                    self.is_send_dashboard[dancer_id] = True
-                                    self.dancer_prediction_map[dancer_id-1].put(float(1)) # Eventually need to store a tuple (predicted move + accuracy)
-                            elif dancer_id == 3:
-                                if self.dancer_data_map[dancer_id-1].qsize() == 80: # Wait for 80 samples before calling
-                                    prediction_list  = []
-                                    for i in range(80):
-                                        data_row = self.dancer_data_map[dancer_id-1].get()
-                                        prediction_list.append(data_row)
-                                    prediction_df = pd.DataFrame(prediction_list)
-                                    # prediction = Call ML Function here (prediction_df)
-                                    self.is_send_dashboard[dancer_id] = True
-                                    self.dancer_prediction_map[dancer_id-1].put(float(1)) # Eventually need to store a tuple (predicted move + accuracy)
+                            if self.dancer_data_map[dancer_id-1].qsize() == 80: 
+                                predicted_move = self.generate_predictions(dancer_id)
+                                
+                                # Send to Eval Server
+                                self.dancer_prediction_map_eval[dancer_id-1].put(PREDICTION_MAP[int(predicted_move)])
+                                self.is_dancers_predicted[dancer_id] = True
+                                # Send to Dashboard Server
+                                self.dancer_prediction_map[dancer_id-1].put(PREDICTION_MAP_DASHBOARD[int(predicted_move)])
+                                self.is_send_dashboard[dancer_id] = True
+                                
 
                     except Exception as e:
                         print(e)
@@ -346,13 +334,69 @@ class Ultra96_Server(threading.Thread):
     def send_timestamp(self, t2, connection):
         t3 = time.time()
         timestamp = '#' + str(t2) + '|' + str(t3)
-
         #if verbose:
             #print('Sending Data. Timestamp t3: ' + str(t3))
-
         encrypted_message = self.encrypt_message(timestamp)
         connection.sendall(encrypted_message)
 
+    '''
+    Prediction funciton here that will integrate with SW1 (Ren Hao's) code: Machine Learning 
+    '''
+    def generate_predictions(self, dancer_id):
+        prediction_list  = []
+        for i in range(80):
+            data_row = self.dancer_data_map[dancer_id-1].get()
+            prediction_list.append(data_row)
+        prediction_df = np.array(prediction_list)
+        prediction_df = prediction_df.astype('float32')
+        if verbose:
+            print(f"shape of the input we passed in initially is {prediction_df.shape}")
+            print(f"type of the input we passed in is {prediction_df.dtype}")
+        prediction = math_loser.math_loser(prediction_df, 'boing_cnn_tflite_80.tflite')
+        return prediction
+
+    '''
+    Helper function to see if data is ready to be sent to eval server
+    '''
+    def check_prediction_status(self):
+        while True:
+            if NUM_OF_DANCERS == 1:
+                if self.is_dancers_predicted[1]:
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
+                    if verbose:
+                        print(' ')
+                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
+                        print(' ')
+                    # For 1 dancer, just send predicted move directly
+                    action = self.dancer_prediction_map_eval[0].get() 
+                    self.send_and_receive_eval_server(action) # Change to prediction
+                    self.is_dancers_predicted[1] = False
+                    
+            elif NUM_OF_DANCERS == 2:
+                if self.is_dancers_predicted[1] and self.is_dancers_predicted[2]:
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
+                    if verbose:
+                        print(' ')
+                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
+                        print(' ')
+                    # For 2 dancers, compare and send the majority vote
+                    self.send_and_receive_eval_server('Dab') # Change to prediction
+                    self.is_dancers_predicted[1] = False
+                    self.is_dancers_predicted[2] = False
+                    
+            elif NUM_OF_DANCERS == 3:
+                if self.is_dancers_predicted[1] and self.is_dancers_predicted[2] and self.is_dancers_predicted[3]:
+                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
+                    if verbose:
+                        print(' ')
+                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
+                        print(' ')
+                    # For 3 dancers, compare and send the majority vote
+                    self.send_and_receive_eval_server('Dab') # Change to prediction
+                    self.is_dancers_predicted[1] = False
+                    self.is_dancers_predicted[2] = False
+                    self.is_dancers_predicted[3] = False
+                
     '''
     Establish connection with eval server and send data over through the socket
     Creates one socket for one connection to the eval server
@@ -368,6 +412,7 @@ class Ultra96_Server(threading.Thread):
     def send_and_receive_eval_server(self,action):
         # Receive the predicted positions from ML
         # Calculate the sync delay in milliseconds
+        '''
         timings_list = []
         for key in self.start_time_map_dancers:
             # Start dance move timestamp + Dancer Clock Offset = Actual timestamp relative to Ultra96
@@ -379,6 +424,7 @@ class Ultra96_Server(threading.Thread):
                     print(f'The start timing for dancer {key} has not been updated!')
                     break
         self.dancer_sync_delay = (max(timings_list) - min(timings_list)) * 1000
+        '''
         self.current_positions = random.choice(POSITIONS) # For Week 9 fake random positions
         if WEEK == 9:
             eval_data = '#' + self.current_positions + '|' + action + '|' + str(0) # No Sync Delay
@@ -519,14 +565,17 @@ class Ultra96_Server(threading.Thread):
 
                 # Only send information over to dashboard once new data is ready and processed
                 elif self.is_send_dashboard[dancer_id] and dancer_id == 1:
+                    print('debug')
                     while not self.dancer_prediction_map[dancer_id-1].empty():
-                        message = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
+                        print('debug 2')
+                        predicted_move = self.dancer_prediction_map[dancer_id-1].get() # message here can be a tuple {"dance_move":"dab","accuracy":"0.69"}
                         packet = packet_pb2.Packet(
-                            dance_move = "Dab",
-                            accuracy = message,
+                            dance_move = predicted_move,
+                            accuracy = float(3),
                         )
                         packet.end = "\x7F"
                         packet.epoch_ms = abs(int(self.start_time_map_dancers[dancer_id] * 1000 + self.dancer_time_offset[dancer_id] * 1000))
+                        print(str(packet.epoch_ms))
                         print('Sending data to db via port: ' + str(addr[1]))
                         conn.sendall(packet.SerializeToString())
                         self.is_send_dashboard[dancer_id] = False
@@ -557,46 +606,6 @@ class Ultra96_Server(threading.Thread):
                         conn.sendall(packet.SerializeToString())
                         self.is_send_dashboard[dancer_id] = False
             
-    '''
-    Prediction funciton here that will integrate with SW1 (Ren Hao's) code: Machine Learning 
-    '''
-    def generate_predictions(self):
-        while True: # Remove later such that it only runs once when called
-            if NUM_OF_DANCERS == 3:
-                if self.is_dancers_predicted[0] and self.is_dancers_predicted[1] and self.is_dancers_predicted[2]:
-                    # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
-                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
-                    if verbose:
-                        print(' ')
-                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
-                        print(' ')
-                    self.send_and_receive_eval_server('Dab')
-                    self.is_dancers_predicted[0] = False
-                    self.is_dancers_predicted[1] = False
-                    self.is_dancers_predicted[2] = False
-                    #prediction = ren_hao_function()
-                    #return prediction
-            elif NUM_OF_DANCERS == 2:
-                if self.is_dancers_predicted[0] and self.is_dancers_predicted[1]:
-                    # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
-                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
-                    if verbose:
-                        print(' ')
-                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
-                        print(' ')
-                    self.send_and_receive_eval_server('Dab')
-                    self.is_dancers_predicted[0] = False
-                    self.is_dancers_predicted[1] = False
-            elif NUM_OF_DANCERS == 1:
-                if self.is_dancers_predicted[0]:
-                    # Not sure where to call this but put here for now for testing/ only send when all dancers finish prediction
-                    self.num_of_moves_predicted = self.num_of_moves_predicted + 1
-                    if verbose:
-                        print(' ')
-                        print(f'======================= Prediction Number {self.num_of_moves_predicted} ==========================')
-                        print(' ')
-                    self.send_and_receive_eval_server('Dab')
-                    self.is_dancers_predicted[0] = False
 
     '''
     Encryption and Decryption of messages using AES

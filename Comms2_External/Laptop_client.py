@@ -6,6 +6,7 @@ import sys
 import socket
 import time
 import base64
+import random
 
 from Crypto import Random
 from Crypto.Cipher import AES
@@ -155,13 +156,19 @@ class Client():
             #raw_data = '#D|' + str(self.dancer_id) + '|Ax|Ay|Az|Rx|Ry|Rz'
 
             timestamp = time.time()
-            raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + '|1|1.5|2.0|0.5|0.7|0.9|S|' + str(timestamp) + '|'
+            random_data = ['|7639|-2580|-9132|206|4429|-205|S|',
+            '|7553|-2567|-9092|216|4532|-237|S|',
+            '|7643|-2534|-9042|234|4302|-192|S|',
+            '|7549|-2530|-9112|240|4443|-222|S|',
+            '|7639|-2582|-9042|224|4345|-212|S|']
+
+            raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + random.choice(random_data) + str(timestamp) + '|'
 
             #emg_data = '#E|' + str(self.dancer_id) + '|emg'
             #emg_data = '#E|' + str(self.dancer_id) + '|225'
             self.send_data(raw_data)
             print(f'Sending Raw Data to Ultra96 Server : {raw_data}')
-            time.sleep(5)
+            time.sleep(0.1)
 
 
     def send_data(self, data):

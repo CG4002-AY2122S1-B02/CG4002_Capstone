@@ -3,8 +3,8 @@ import tflite_runtime.interpreter as tflite
 import numpy as np
 import pandas as pd
 
-def math_loser(input_data):
-    interpreter = tflite.Interpreter(model_path='boing_cnn_tflite.tflite')
+def math_loser(input_data, model_path):
+    interpreter = tflite.Interpreter(model_path= model_path)
     interpreter.allocate_tensors()
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
@@ -45,4 +45,4 @@ if __name__ == '__main__':
     _input_data = _input_data.astype('float32')
     print(f"shape of the input we passed in initially is {_input_data.shape}")
     print(f"type of the input we passed in is {_input_data.dtype}")
-    pred = math_loser(_input_data)
+    pred = math_loser(_input_data, 'boing_cnn_tflite_80.tflite')
