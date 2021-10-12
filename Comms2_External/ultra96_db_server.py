@@ -303,7 +303,6 @@ class Ultra96_Server(threading.Thread):
                             
                             data_row = [Ax,Ay,Az,Rx,Ry,Rz]
                             self.dancer_data_map[dancer_id-1].put(data_row)
-                            #self.dancer_data_counter[dancer_id] += 1
 
                             if dancer_id == 1:
                                 if self.dancer_data_map[dancer_id-1].qsize() == 5: # Wait for 80 samples before calling
