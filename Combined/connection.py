@@ -67,7 +67,6 @@ BEETLE_DANCER_ID = {
 
 USE_FAKE_DATA = False
 laptop_client = Laptop_client
-start = 0
 
 # %%
 
@@ -183,12 +182,13 @@ class Delegate(DefaultDelegate):
         if (parsed_data[0] == b'D'):
             # Add start of dance + Timestamp
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -3]))
-            current_epoch_timestamp = self.start_of_arduino_timestamp + parsed_data[8]
+            # current_epoch_timestamp = self.start_of_arduino_timestamp + parsed_data[8]
+            current_epoch_timestamp = time()
             reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(current_epoch_timestamp) + "|"
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1]))
 
-        # logging.info("#DEBUG#: Formatted packet %s" % reformatted_data)
+        logging.info("#DEBUG#: Formatted packet %s" % reformatted_data)
         return reformatted_data
 
 
@@ -245,6 +245,10 @@ class BeetleThread():
     def reconnect(self):
         logging.info("Attempting reconnection with %s" %
                      self.beetle_periobj.addr)
+
+        reconnection_external_packet = "#R|" + self.dancer_id + "|"
+        laptop_client.send_data(reconnection_external_packet)
+
         try:
             self.beetle_periobj.disconnect()
             sleep(1)
@@ -307,8 +311,6 @@ if __name__ == '__main__':
 
     laptop_client = Laptop_client.main(dancer_id)
 
-    start = time()
-
     if (USE_FAKE_DATA):
         laptop_client.manage_bluno_data()
     else:
@@ -318,7 +320,7 @@ if __name__ == '__main__':
             beetle = Peripheral(mac)
             beetle.withDelegate(Delegate(mac, dancer_id))
         except:
-            sleep(5)
+            sleep(10)
             beetle = Peripheral(mac)
             beetle.withDelegate(Delegate(mac, dancer_id))
 

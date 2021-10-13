@@ -26,7 +26,7 @@ TUNNEL_TWO_SSH_PASSWORD = "cg4002b02"
 # Initialise Socket Information
 IP_ADDR = '127.0.0.1'
 # For local testing
-PORT_NUM = 8000
+PORT_NUM = 7000
 # For actual production
 PORT_NUMS = [8001,8002,8003]
 GROUP_ID = 2
