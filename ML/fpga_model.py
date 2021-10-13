@@ -4,6 +4,10 @@ import time
 import pandas as pd
 
 def cnn(input_arr):
+    height = len(input_arr)
+    width = len(input_arr[0])
+    input_arr = np.reshape(input_arr, (height * width, 1))
+    print(f"After flattern, the shape of input data is {input_arr.shape}")
     overlay = Overlay('/home/xilinx/fpga/design_1.bit')
 
     l0 = overlay.conv_layer_1_0 
@@ -68,10 +72,6 @@ if __name__ == '__main__':
     _input_data = _input_data.astype('float32')
     print(f"shape of the input we passed in initially is {_input_data.shape}")
     print(f"type of the input we passed in is {_input_data.dtype}")
-    height = len(_input_data)
-    width = len(_input_data[0])
-    _input_data = np.reshape(_input_data, (height * width, 1))
-    print(f"After flattern, the shape of input data is {_input_data.shape}")
     # Send input as an array (flatten 60 * 6 to 360 * 1 - I think it is row major order)
     # input_arr = []
     # for i in range(360):
