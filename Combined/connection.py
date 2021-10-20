@@ -99,10 +99,11 @@ class Delegate(DefaultDelegate):
 
                 if not self.checkCRC(3):
                     logging.info(
-                        "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    self.buffer = b''
-                    BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    return
+                        "#DEBUG#: CRC Checksum doesn't match for %s." % self.mac_addr)
+                    self.buffer = self.buffer[20:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+                    # return
 
                 # TODO double confirm EMG packet from Arduino
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
@@ -119,9 +120,10 @@ class Delegate(DefaultDelegate):
                 if not self.checkCRC(18):
                     logging.info(
                         "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    self.buffer = b''
-                    return
+                    self.buffer = self.buffer[20:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+                    # return
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
                 laptop_client.send_data(reformatted_data)
@@ -136,11 +138,11 @@ class Delegate(DefaultDelegate):
                 if not self.checkCRC(5):
                     logging.info(
                         "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    self.buffer = b''
-                    return
+                    self.buffer = self.buffer[20:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+                    # return
 
-                # todo sync_clock
                 # TODO change timestamp packet every 30 seconds? 1 min?
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
                 logging.info(reformatted_data)
@@ -148,6 +150,23 @@ class Delegate(DefaultDelegate):
 
                 logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
                 logging.info("Okay stats for %s: %s" % (self.mac_addr, BEETLE_OKAY_NUM[self.mac_addr]))
+
+            elif (self.buffer[0] == 80 and len(self.buffer) >= 20): # * ASCII Code P
+                position_packet_data = raw_packet_data[0:11]
+                parsed_packet_data = struct.unpack(
+                    '!ccccccccccc', position_packet_data
+                )
+
+                if not self.checkCRC(10):
+                    logging.info(
+                        "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
+                    self.buffer = self.buffer[20:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+                    # return
+
+                # TODO send position data to ultra96
+                print(parsed_packet_data)
 
             # Corrupted buffer. Move forward by one byte at a time
             else:
