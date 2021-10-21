@@ -105,20 +105,20 @@ void calibrateMPUOffset() {
 //    mpu.setZGyroOffset(30);
 
     // BLE 2
-//        mpu.setXAccelOffset(-3114);
-//        mpu.setYAccelOffset(745);
-//        mpu.setZAccelOffset(1368);
-//        mpu.setXGyroOffset(32);
-//        mpu.setYGyroOffset(158);
-//        mpu.setZGyroOffset(-14);
+    mpu.setXAccelOffset(-3393);
+    mpu.setYAccelOffset(468);
+    mpu.setZAccelOffset(1360);
+    mpu.setXGyroOffset(30);
+    mpu.setYGyroOffset(155);
+    mpu.setZGyroOffset(-15);
 
     // BLE 3
-        mpu.setXAccelOffset(785);
-        mpu.setYAccelOffset(-481);
-        mpu.setZAccelOffset(905);
-        mpu.setXGyroOffset(2);
-        mpu.setYGyroOffset(-22);
-        mpu.setZGyroOffset(-85);
+    // mpu.setXAccelOffset(785);
+    // mpu.setYAccelOffset(-481);
+    // mpu.setZAccelOffset(905);
+    // mpu.setXGyroOffset(2);
+    // mpu.setYGyroOffset(-22);
+    // mpu.setZGyroOffset(-85);
 
 }
 

@@ -29,10 +29,9 @@ BLE_CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 
 
 # * Mac Addresses of Bluno Beetles
-BEETLE_1 = 'b0:b1:13:2d:b4:02'
+BEETLE_1 = 'b0:b1:13:2d:b6:22'
 BEETLE_2 = 'b0:b1:13:2d:d3:58'
 BEETLE_3 = 'b0:b1:13:2d:b4:01'
-ALL_BEETLE_MAC = [BEETLE_2]
 
 
 # * Handshake status of Beetles
