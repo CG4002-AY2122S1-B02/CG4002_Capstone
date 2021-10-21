@@ -4,7 +4,7 @@
 
 // * Constants
 #define NUM_SAMPLES 10
-#define START_MOVE_THRESHOLD 250
+#define START_MOVE_THRESHOLD 100
 #define STOP_MOVE_THRESHOLD 70
 
 #define BAUD_RATE 115200
@@ -12,23 +12,23 @@
 // * MPU related variables
 MPU6050 mpu;
 // MPU control/status variables
-bool dmpReady = false;          // set true if DMP init was successful
-uint8_t devStatus;              // return status after each device operation (0 = success, !0 = error)
-uint16_t packetSize;            // expected DMP packet size (default is 42 bytes)
-uint16_t fifoCount;             // count of all bytes currently in FIFO
-uint8_t fifoBuffer[64];         // FIFO storage buffer
+bool dmpReady = false;  // set true if DMP init was successful
+uint8_t devStatus;      // return status after each device operation (0 = success, !0 = error)
+uint16_t packetSize;    // expected DMP packet size (default is 42 bytes)
+uint16_t fifoCount;     // count of all bytes currently in FIFO
+uint8_t fifoBuffer[64]; // FIFO storage buffer
 
 // * Orientation / Motion variables
-Quaternion q;                   // [w, x, y, z]         quaternion container
-VectorInt16 aa;                 // [x, y, z]            accel sensor measurements (includes gravity)
-VectorInt16 aaReal;             // [x, y, z]            gravity-free accel sensor measurements
-VectorFloat gravity;            // [x, y, z]            gravity vector
-float ypr[3];                   // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
+Quaternion q;        // [w, x, y, z]         quaternion container
+VectorInt16 aa;      // [x, y, z]            accel sensor measurements (includes gravity)
+VectorInt16 aaReal;  // [x, y, z]            gravity-free accel sensor measurements
+VectorFloat gravity; // [x, y, z]            gravity vector
+float ypr[3];        // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
-int16_t AccX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in X axis. Acts like a window
-int16_t AccY[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Y axis. Acts like a window
-int16_t AccZ[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Z axis. Acts like a window
-int curr_frame = 0;             // Used to indicate which frame of the window we are going to be placing the values in
+int16_t AccX[NUM_SAMPLES]; // Stores NUM_SAMPLES number of the most recent real acceleration values in X axis. Acts like a window
+int16_t AccY[NUM_SAMPLES]; // Stores NUM_SAMPLES number of the most recent real acceleration values in Y axis. Acts like a window
+int16_t AccZ[NUM_SAMPLES]; // Stores NUM_SAMPLES number of the most recent real acceleration values in Z axis. Acts like a window
+int curr_frame = 0;        // Used to indicate which frame of the window we are going to be placing the values in
 bool fullWindow = false;
 double prevWindowAvgX = 0;
 double prevWindowAvgY = 0;
@@ -37,6 +37,9 @@ double prevWindowAvgZ = 0;
 bool firstWindowDone = false;
 bool detectedMovement = false;
 int32_t lastDetectedMoveTime, firstDetectedMoveTime;
+
+double windowDiffMin = -1e9, windowDiffMax = 1e9;
+int32_t minTime, maxTime;
 
 int currPosition = 2;
 int left = 0, right = 0;
@@ -51,15 +54,18 @@ int left = 0, right = 0;
 // *               |_|
 
 // * Function to check for FIFO buffer
-void checkFIFO() {
+void checkFIFO()
+{
     mpu.resetFIFO();
     fifoCount = mpu.getFIFOCount();
-    while (fifoCount < packetSize) fifoCount = mpu.getFIFOCount();
+    while (fifoCount < packetSize)
+        fifoCount = mpu.getFIFOCount();
     mpu.getFIFOBytes(fifoBuffer, packetSize);
 }
 
 // * Function to calibrate MPU offset
-void calibrateMPUOffset() {
+void calibrateMPUOffset()
+{
     // BLE 1
     mpu.setXAccelOffset(505);
     mpu.setYAccelOffset(972);
@@ -83,7 +89,6 @@ void calibrateMPUOffset() {
     //        mpu.setXGyroOffset(2);
     //        mpu.setYGyroOffset(-22);
     //        mpu.setZGyroOffset(-85);
-
 }
 
 /*
@@ -93,7 +98,8 @@ void calibrateMPUOffset() {
     we will have to divide the values by 8192, then multiply by g = 9.80665 m/s^2
     acceleration sensitivity is +/-2g, hence values will be 0-8192 will represent 1g and -8192-0 represents -1g
 */
-void getAccValues() {
+void getAccValues()
+{
     mpu.dmpGetQuaternion(&q, fifoBuffer);
     mpu.dmpGetAccel(&aa, fifoBuffer);
     mpu.dmpGetGravity(&gravity, &q);
@@ -122,7 +128,8 @@ void getAccValues() {
     curr_frame = (curr_frame + 1) % 10;
 }
 
-void setup() {
+void setup()
+{
     // join I2C bus (I2Cdev library doesn't do this automatically)
 #if I2CDEV_IMPLEMENTATION == I2CDEV_ARDUINO_WIRE
     Wire.begin();
@@ -149,7 +156,8 @@ void setup() {
     calibrateMPUOffset();
 
     // Check DMP initialized correctly (returns 0 if so)
-    if (devStatus == 0) {
+    if (devStatus == 0)
+    {
         // turn on the DMP, now that it's ready
         mpu.setDMPEnabled(true);
         dmpReady = true;
@@ -164,16 +172,20 @@ void setup() {
 }
 
 // * Detect motion and check for position
-void detectMotion() {
+void detectMotion()
+{
     // once curr_frame hits NUM_SAMPLES-1 (hit window size) for the first time, then can start to perform sliding window
-    if (!fullWindow && curr_frame == NUM_SAMPLES - 1) fullWindow = true;
+    if (!fullWindow && curr_frame == NUM_SAMPLES - 1)
+        fullWindow = true;
 
     // find average of current window and compare to previous window
-    if (fullWindow) {
+    if (fullWindow)
+    {
         double totalAccX = 0;
         double totalAccY = 0;
         double totalAccZ = 0;
-        for (int i = 0; i < NUM_SAMPLES; i++) {
+        for (int i = 0; i < NUM_SAMPLES; i++)
+        {
             totalAccX += AccX[i];
             totalAccY += AccY[i];
             totalAccZ += AccZ[i];
@@ -184,12 +196,20 @@ void detectMotion() {
         double currWindowAvgZ = totalAccZ / (double)NUM_SAMPLES;
 
         // only need to calculate difference between previous and current window average after we have taken the first window
-        if (firstWindowDone) {
+        if (firstWindowDone)
+        {
             double windowDiffX = currWindowAvgX - prevWindowAvgX;
             double windowDiffY = currWindowAvgY - prevWindowAvgY;
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
 
-            if (!detectedMovement && (abs(windowDiffY) > START_MOVE_THRESHOLD)) {
+            //            Serial.print(windowDiffX);
+            //          Serial.print(" ");
+            //          Serial.print(windowDiffY);
+            //          Serial.print(" ");
+            Serial.println(windowDiffZ);
+
+            if (!detectedMovement && (abs(windowDiffZ) > START_MOVE_THRESHOLD))
+            {
                 detectedMovement = true;
                 firstDetectedMoveTime = micros();
                 lastDetectedMoveTime = micros();
@@ -197,27 +217,46 @@ void detectMotion() {
 
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
             // for about 1.5 seconds, then we will deem it that the user has stopped moving
-            if (detectedMovement) {
+            if (detectedMovement)
+            {
+                if (windowDiffZ < windowDiffMin)
+                {
+                    windowDiffMin = windowDiffZ;
+                    minTime = millis();
+                }
+                else if (windowDiffZ > windowDiffMax)
+                {
+                    windowDiffMax = windowDiffZ;
+                    maxTime = millis();
+                }
+
                 // positive direction is left, negative direction is right
-                if(windowDiffY > STOP_MOVE_THRESHOLD) left++;
-                else if(windowDiffY < -STOP_MOVE_THRESHOLD) right++;
-                
-                if (abs(windowDiffY) > STOP_MOVE_THRESHOLD) {
+                if (windowDiffZ > STOP_MOVE_THRESHOLD)
+                    left++;
+                else if (windowDiffZ < -STOP_MOVE_THRESHOLD)
+                    right++;
+
+                if (abs(windowDiffZ) > STOP_MOVE_THRESHOLD)
+                {
                     lastDetectedMoveTime = micros();
 
-                    if (lastDetectedMoveTime - firstDetectedMoveTime > 750000) {                        
-                        if (left > right && (currPosition == 2 || currPosition == 3)) currPosition--;
-                        else if (right > left && (currPosition == 1 || currPosition == 2)) currPosition++;
-
-                        left = 0;
-                        right  = 0;
-                        firstDetectedMoveTime = micros();
-                    }
+                    //          if (lastDetectedMoveTime - firstDetectedMoveTime > 800000) {
+                    //            if(maxTime > minTime) Serial.println("moved left");
+                    //            else Serial.println("moved right");
+                    //          }
                 }
-                else if (micros() - lastDetectedMoveTime > 1000000) {
+                else if (micros() - lastDetectedMoveTime > 1000000)
+                {
+                    if (maxTime > minTime)
+                        Serial.println("moved left");
+                    else
+                        Serial.println("moved right");
+
+                    windowDiffMin = 1e9;
+                    windowDiffMax = -1e9;
+                    maxTime = millis();
+                    minTime = millis();
                     detectedMovement = false;
-                    left = 0;
-                    right = 0;
                 }
             }
         }
@@ -230,10 +269,10 @@ void detectMotion() {
     }
 }
 
-void loop() {
+void loop()
+{
     checkFIFO();
 
     getAccValues();
     detectMotion();
-
 }
