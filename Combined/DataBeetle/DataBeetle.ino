@@ -7,8 +7,8 @@
 // * Constants
 #define NUM_SAMPLES 10
 #define START_MOVE_THRESHOLD 500
+#define POS_MOVE_THRESHOLD 90
 #define STOP_MOVE_THRESHOLD 70
-#define STOP_POS_MOVE_THRESHOLD 70 // ? Unused for now
 
 #define BAUD_RATE 115200
 #define SAMPLING_PERIOD 40 // 40ms, so 25Hz
@@ -59,11 +59,13 @@ double prevWindowAvgY = 0;
 double prevWindowAvgZ = 0;
 
 bool firstWindowDone = false;
-bool detectedMovement = false;
+bool detectedDanceMovement = false;
+bool detectedPosMovement = false;
 bool firstDancePacket = false;
-int32_t lastDetectedMoveTime, firstDetectedMoveTime;
+int32_t lastDetectedMoveTime;
 
-int left = 0, right = 0;
+double windowDiffMin = -1e9, windowDiffMax = 1e9;
+int32_t minTime, maxTime;
 
 // * Data related global variables
 int16_t accelX;
@@ -101,12 +103,12 @@ void checkFIFO() {
 // * Function to calibrate MPU offset
 void calibrateMPUOffset() {
     // BLE 1
-    mpu.setXAccelOffset(505);
-    mpu.setYAccelOffset(972);
-    mpu.setZAccelOffset(1078);
-    mpu.setXGyroOffset(20);
-    mpu.setYGyroOffset(26);
-    mpu.setZGyroOffset(30);
+    mpu.setXAccelOffset(271);
+    mpu.setYAccelOffset(1047);
+    mpu.setZAccelOffset(1071);
+    mpu.setXGyroOffset(50);
+    mpu.setYGyroOffset(54);
+    mpu.setZGyroOffset(29);
 
     // BLE 2
 //        mpu.setXAccelOffset(-3114);
@@ -117,12 +119,12 @@ void calibrateMPUOffset() {
 //        mpu.setZGyroOffset(-14);
 
     // BLE 3
-        // mpu.setXAccelOffset(785);
-        // mpu.setYAccelOffset(-481);
-        // mpu.setZAccelOffset(905);
-        // mpu.setXGyroOffset(2);
-        // mpu.setYGyroOffset(-22);
-        // mpu.setZGyroOffset(-85);
+//         mpu.setXAccelOffset(785);
+//         mpu.setYAccelOffset(-481);
+//         mpu.setZAccelOffset(905);
+//         mpu.setXGyroOffset(2);
+//         mpu.setYGyroOffset(-22);
+//         mpu.setZGyroOffset(-85);
 
 }
 
@@ -183,47 +185,49 @@ void detectStartMoveOrPosition() {
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
 
             // ? Maybe add separate logic for positional move threshold
-            if (!detectedMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
+            if (!detectedDanceMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
                 firstDancePacket = true;
-                detectedMovement = true;
-                firstDetectedMoveTime = micros();
+                detectedDanceMovement = true;
+                lastDetectedMoveTime = micros();
+            }
+            else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < POS_MOVE_THRESHOLD && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
+                detectedPosMovement = true;
                 lastDetectedMoveTime = micros();
             }
 
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
             // for about 1.5 seconds, then we will deem it that the user has stopped moving
-            if (detectedMovement) {
-                // positive direction is left, negative direction is right
-                if (windowDiffY > STOP_POS_MOVE_THRESHOLD) left++;
-                else if (windowDiffY < -STOP_POS_MOVE_THRESHOLD) right++;
-
-                // * Purely positional change (only changes in Y window diff)
-                if (abs(windowDiffX) < STOP_POS_MOVE_THRESHOLD && abs(windowDiffY) > STOP_POS_MOVE_THRESHOLD && abs(windowDiffZ) < STOP_POS_MOVE_THRESHOLD) {
-                    lastDetectedMoveTime = micros();
-
-                    if (lastDetectedMoveTime - firstDetectedMoveTime > 750000) {
-                        if (left > right) {
-                            sendPosPacket(1);
-                        }
-                        else if (right > left) {
-                            sendPosPacket(0);
-                        }
-
-                        left = 0;
-                        right  = 0;
-                        firstDetectedMoveTime = micros();
-                    }
+            if (detectedDanceMovement) {
+                if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
+                else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
+            }
+            else if (detectedPosMovement)
+            {
+                if (windowDiffZ < windowDiffMin)
+                {
+                    windowDiffMin = windowDiffZ;
+                    minTime = millis();
                 }
-
-                // * Possible dancing changes
-                else if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) {
-                    lastDetectedMoveTime = micros();
+                if (windowDiffZ > windowDiffMax)
+                {
+                    windowDiffMax = windowDiffZ;
+                    maxTime = millis();
                 }
+                
 
-                else if (micros() - lastDetectedMoveTime > 1000000) {
-                    detectedMovement = false;
-                    left = 0;
-                    right = 0;
+                if (abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
+                else if (micros() - lastDetectedMoveTime > 1000000)
+                {
+                    if (maxTime > minTime)
+                        sendPosPacket(1);
+                    else
+                        sendPosPacket(0);
+
+                    windowDiffMin = 1e9;
+                    windowDiffMax = -1e9;
+                    maxTime = millis();
+                    minTime = millis();
+                    detectedPosMovement = false;
                 }
             }
         }
@@ -469,7 +473,7 @@ void loop() {
     detectStartMoveOrPosition();
 
     // Handshake completed
-    if (handshakeEnd && detectedMovement) {
+    if (handshakeEnd && detectedDanceMovement) {
         currentTime = millis();
 
         // Send sensor data
