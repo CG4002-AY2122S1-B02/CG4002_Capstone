@@ -1,0 +1,3 @@
+50 Samples for Dab
+49 Samples for Mermaid (Combined 2 trials. First trial is 0-28. Second Trial is 29-49.)
+51 Samples for JamesBond (Can ignore sample number 1.)
