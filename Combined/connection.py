@@ -335,9 +335,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = "Setup options")
     parser.add_argument('-f', '--fake-data', default = False, action='store_true', help = 'fake_data')
     parser.add_argument('-id', '--dancer-id', default = 1, help = 'dancer id')
+    parser.add_argument('-p', '--port', default = 7000, help = 'port number')
     args = parser.parse_args()
     USE_FAKE_DATA = args.fake_data
     dancer_id = args.dancer_id
+    port_number = args.port
 
     # * Setup Logging
     logging.basicConfig(
@@ -345,7 +347,7 @@ if __name__ == '__main__':
         level=logging.INFO
     )
 
-    laptop_client = Laptop_client.main(dancer_id)
+    laptop_client = Laptop_client.main(dancer_id, port_number)
 
     if (USE_FAKE_DATA):
         laptop_client.manage_bluno_data()
