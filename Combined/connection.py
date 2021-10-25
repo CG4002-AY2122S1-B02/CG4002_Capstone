@@ -76,6 +76,7 @@ BEETLE_DANCER_ID = {
 
 USE_FAKE_DATA = False
 laptop_client = Laptop_client
+last_time_sync = 0
 
 
 # * Delegate that is attached to each Beetle peripheral
@@ -90,6 +91,8 @@ class Delegate(DefaultDelegate):
 
     # * Handles incoming packets from serial comms
     def handleNotification(self, cHandle, data):
+        global last_time_sync
+
         # logging.info("#DEBUG#: Printing Raw Data here: %s. Length: %s" % (data, len(data)))
 
         self.buffer += data
@@ -138,6 +141,7 @@ class Delegate(DefaultDelegate):
                 self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
             # Received Timestamp packet 6 bytes
+            # ! Currently unused
             elif (self.buffer[0] == ord(TIMESTAMP) and len(self.buffer) >= BLE_PACKET_SIZE):  # * ASCII Code T
                 timestamp_packet_data = raw_packet_data[0: TIMESTAMP_PACKET_SIZE]
                 parsed_packet_data = struct.unpack(
@@ -151,9 +155,8 @@ class Delegate(DefaultDelegate):
                     return
                     # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
 
-                # TODO change timestamp packet every 30 seconds? 1 min?
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                logging.info(reformatted_data)
+                logging.info("#DEBUG#: Arduino Timestamp Packet %s" % reformatted_data)
                 self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
                 # logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
@@ -195,6 +198,8 @@ class Delegate(DefaultDelegate):
             logging.info('#DEBUG#: Received ACK packet from %s' %
                          self.mac_addr)
 
+            last_time_sync = time()
+            laptop_client.sync_clock()
         else:
             BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
 
@@ -231,6 +236,9 @@ class Delegate(DefaultDelegate):
 
 
 class BeetleThread():
+
+    global last_time_sync
+
     def __init__(self, beetle_peripheral_object, dancer_id):
 
         self.beetle_periobj = beetle_peripheral_object
@@ -311,11 +319,14 @@ class BeetleThread():
     # * If request reset is true, reset Beetle and reinitiate handshake
     def run(self):
         try:
-            # TODO add time sync here
             while True:
                 # Break and reset
                 if BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     break
+
+                # * If time difference is more than 60 seconds, perform another time sync
+                if (time() - last_time_sync > 60):
+                    laptop_client.sync_clock()
 
                 if self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     continue
