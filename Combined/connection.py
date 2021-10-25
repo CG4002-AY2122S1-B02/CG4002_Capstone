@@ -9,27 +9,35 @@ import logging
 import Laptop_client
 
 
-# * Different Packet Types
+# * Packet Types
+# For sending to Arduino
 HELLO = 'H'
 ACK = 'A'
 RESET = 'R'
-DATA = 'D'
-EMG = 'E'
-START_DANCE = 'S'
-NORMAL_DANCE = 'N'
-TIMESTAMP = 'T'
+# Received from Arduino
+DATA = b'D'
+EMG = b'E'
+TIMESTAMP = b'T'
+POSITION = b'P'
+LEFT_POS = b'L'
+RIGHT_POS = b'R'
 
 
 # * Bluetooth Data
 BLE_SERVICE_UUID = "0000dfb0-0000-1000-8000-00805f9b34fb"
 BLE_CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
+ACK_PACKET_SIZE = 6
+BLE_PACKET_SIZE = 20
+EMG_PACKET_SIZE = 4
+DATA_PACKET_SIZE = 19
+TIMESTAMP_PACKET_SIZE = 6
+POSITION_PACKET_SIZE = 11
 
 
 # * Mac Addresses of Bluno Beetles
 BEETLE_1 = 'b0:b1:13:2d:d3:58'
 BEETLE_2 = 'b0:b1:13:2d:b4:02'
 BEETLE_3 = 'b0:b1:13:2d:b4:01'
-ALL_BEETLE_MAC = [BEETLE_3]
 
 
 # * Handshake status of Beetles
@@ -46,13 +54,14 @@ BEETLE_REQUEST_RESET_STATUS = {
     BEETLE_3: False,
 }
 
-# ! FOR DEBUGGING AND LOGGING
+# * For counting corrupted packets
 BEETLE_CORRUPTION_NUM = {
     BEETLE_1: 0,
     BEETLE_2: 0,
     BEETLE_3: 0,
 }
 
+# * For counting okay packets
 BEETLE_OKAY_NUM = {
     BEETLE_1: 0,
     BEETLE_2: 0,
@@ -67,8 +76,8 @@ BEETLE_DANCER_ID = {
 
 USE_FAKE_DATA = False
 laptop_client = Laptop_client
+last_time_sync = 0
 
-# %%
 
 # * Delegate that is attached to each Beetle peripheral
 class Delegate(DefaultDelegate):
@@ -82,6 +91,8 @@ class Delegate(DefaultDelegate):
 
     # * Handles incoming packets from serial comms
     def handleNotification(self, cHandle, data):
+        global last_time_sync
+
         # logging.info("#DEBUG#: Printing Raw Data here: %s. Length: %s" % (data, len(data)))
 
         self.buffer += data
@@ -89,83 +100,106 @@ class Delegate(DefaultDelegate):
         # Handshake completed. Handle data packets
         if (BEETLE_HANDSHAKE_STATUS[self.mac_addr]):
 
-            raw_packet_data = self.buffer[0: 20]
+            # * Reads the first BLE packet
+            raw_packet_data = self.buffer[0: BLE_PACKET_SIZE]
 
             # Received EMG Packet 4 bytes
-            if (self.buffer[0] == 69 and len(self.buffer) >= 20):  # * ASCII Code E (EMG)
-                emg_packet_data = raw_packet_data[0: 4]
+            if (self.buffer[0] == ord(EMG) and len(self.buffer) >= BLE_PACKET_SIZE):  # * ASCII Code E (EMG)
+                emg_packet_data = raw_packet_data[0: EMG_PACKET_SIZE]
                 parsed_packet_data = struct.unpack(
                     '!chc', emg_packet_data)
 
-                if not self.checkCRC(3):
+                if not self.checkCRC(EMG_PACKET_SIZE - 1):
                     logging.info(
-                        "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    self.buffer = b''
-                    BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+                        "#DEBUG#: CRC Checksum doesn't match for %s." % self.mac_addr)
+                    self.buffer = self.buffer[BLE_PACKET_SIZE:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
                     return
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
 
                 # TODO double confirm EMG packet from Arduino
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
                 laptop_client.send_data(reformatted_data)
-                self.buffer = self.buffer[20:]
+                self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
             # Received Data Packet 19 bytes
-            # * ASCII Code D (DATA)
-            elif (self.buffer[0] == 68 and len(self.buffer) >= 20):
-                data_packet_data = raw_packet_data[0: 19]
+            elif (self.buffer[0] == ord(DATA) and len(self.buffer) >= BLE_PACKET_SIZE): # * ASCII Code D (DATA)
+                data_packet_data = raw_packet_data[0: DATA_PACKET_SIZE]
                 parsed_packet_data = struct.unpack(
                     '!chhhhhhcLc', data_packet_data)
 
-                if not self.checkCRC(18):
+                if not self.checkCRC(DATA_PACKET_SIZE - 1):
                     logging.info(
                         "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    self.buffer = b''
+                    self.buffer = self.buffer[BLE_PACKET_SIZE:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+                    # return
+
+                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
+                laptop_client.send_data(reformatted_data)
+                self.buffer = self.buffer[BLE_PACKET_SIZE:]
+
+            # Received Timestamp packet 6 bytes
+            # ! Currently unused
+            elif (self.buffer[0] == ord(TIMESTAMP) and len(self.buffer) >= BLE_PACKET_SIZE):  # * ASCII Code T
+                timestamp_packet_data = raw_packet_data[0: TIMESTAMP_PACKET_SIZE]
+                parsed_packet_data = struct.unpack(
+                    '!cLc', timestamp_packet_data)
+
+                if not self.checkCRC(TIMESTAMP_PACKET_SIZE - 1):
+                    logging.info(
+                        "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
+                    self.buffer = self.buffer[BLE_PACKET_SIZE:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    return
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+
+                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
+                logging.info("#DEBUG#: Arduino Timestamp Packet %s" % reformatted_data)
+                self.buffer = self.buffer[BLE_PACKET_SIZE:]
+
+                # logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
+                # logging.info("Okay stats for %s: %s" % (self.mac_addr, BEETLE_OKAY_NUM[self.mac_addr]))
+
+            # Recieved Position change packet 11 bytes
+            elif (self.buffer[0] == ord(POSITION) and len(self.buffer) >= BLE_PACKET_SIZE): # * ASCII Code P
+                position_packet_data = raw_packet_data[0:POSITION_PACKET_SIZE]
+                parsed_packet_data = struct.unpack(
+                    '!ccccccccccc', position_packet_data
+                )
+
+                if not self.checkCRC(POSITION_PACKET_SIZE - 1):
+                    logging.info(
+                        "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
+                    self.buffer = self.buffer[BLE_PACKET_SIZE:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
                     return
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
                 laptop_client.send_data(reformatted_data)
-                self.buffer = self.buffer[20:]
-
-            # Received Timestamp packet 6 bytes
-            elif (self.buffer[0] == 84 and len(self.buffer) >= 20):  # * ASCII Code T
-                timestamp_packet_data = raw_packet_data[0: 6]
-                parsed_packet_data = struct.unpack(
-                    '!cLc', timestamp_packet_data)
-
-                if not self.checkCRC(5):
-                    logging.info(
-                        "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    self.buffer = b''
-                    return
-
-                # todo sync_clock
-                # TODO change timestamp packet every 30 seconds? 1 min?
-                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                logging.info(reformatted_data)
-                self.buffer = self.buffer[20:]
-
-                logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
-                logging.info("Okay stats for %s: %s" % (self.mac_addr, BEETLE_OKAY_NUM[self.mac_addr]))
+                self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
             # Corrupted buffer. Move forward by one byte at a time
             else:
-                # logging.info("#DEBUG#: Corrupted! Buffer %s" % (self.buffer[0:20]))
+                logging.info("#DEBUG#: Corrupted! Buffer %s" % (self.buffer[0:BLE_PACKET_SIZE]))
                 # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
                 BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
-                self.buffer = self.buffer[20:]
+                self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
         # Received ACK packet
-        elif (self.buffer[0] == 65):
+        elif (self.buffer[0] == ord(ACK)):
             # 'A', Timestamp, CRC8
-            parsed_packet_data = struct.unpack('!cLc', self.buffer[0:6])
-            self.buffer = self.buffer[6:]
+            parsed_packet_data = struct.unpack('!cLc', self.buffer[0:ACK_PACKET_SIZE])
+            self.buffer = self.buffer[ACK_PACKET_SIZE:]
             self.start_of_arduino_timestamp = time() * 1000 - parsed_packet_data[1]
             BEETLE_HANDSHAKE_STATUS[self.mac_addr] = True
             logging.info('#DEBUG#: Received ACK packet from %s' %
                          self.mac_addr)
 
+            last_time_sync = time()
+            laptop_client.sync_clock()
         else:
             BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
 
@@ -179,12 +213,21 @@ class Delegate(DefaultDelegate):
         BEETLE_OKAY_NUM[self.mac_addr] += 1
         packet_start = "#" + str(parsed_data[0], 'UTF-8') + "|" + str(self.dancer_id) + "|"
 
-        if (parsed_data[0] == b'D'):
-            # Add start of dance + Timestamp
+        if (parsed_data[0] == DATA):
+            # Add start of dance + Timestamp + Accel & Gyro Data
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -3]))
-            # current_epoch_timestamp = self.start_of_arduino_timestamp + parsed_data[8]
+            # ! current_epoch_timestamp = self.start_of_arduino_timestamp + parsed_data[8]
             current_epoch_timestamp = time()
             reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(current_epoch_timestamp) + "|"
+
+        elif (parsed_data[0] == POSITION):
+            # Left packet
+            if LEFT_POS in parsed_data[1:10]:
+                reformatted_data = packet_start + "L|"
+            # Right packet
+            elif RIGHT_POS in parsed_data[1:10]:
+                reformatted_data = packet_start + "R|"
+
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1]))
 
@@ -193,6 +236,9 @@ class Delegate(DefaultDelegate):
 
 
 class BeetleThread():
+
+    global last_time_sync
+
     def __init__(self, beetle_peripheral_object, dancer_id):
 
         self.beetle_periobj = beetle_peripheral_object
@@ -278,6 +324,10 @@ class BeetleThread():
                 if BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     break
 
+                # * If time difference is more than 60 seconds, perform another time sync
+                if (time() - last_time_sync > 60):
+                    laptop_client.sync_clock()
+
                 if self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     continue
 
@@ -291,17 +341,16 @@ class BeetleThread():
             self.start_handshake()
             self.run()
 
-
-# %%
-# ! Actual main code
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description = "Setup options")
     parser.add_argument('-f', '--fake-data', default = False, action='store_true', help = 'fake_data')
     parser.add_argument('-id', '--dancer-id', default = 1, help = 'dancer id')
+    parser.add_argument('-p', '--port', default = 7000, help = 'port number')
     args = parser.parse_args()
     USE_FAKE_DATA = args.fake_data
     dancer_id = args.dancer_id
+    port_number = args.port
 
     # * Setup Logging
     logging.basicConfig(
@@ -309,7 +358,7 @@ if __name__ == '__main__':
         level=logging.INFO
     )
 
-    laptop_client = Laptop_client.main(dancer_id)
+    laptop_client = Laptop_client.main(dancer_id, port_number)
 
     if (USE_FAKE_DATA):
         laptop_client.manage_bluno_data()

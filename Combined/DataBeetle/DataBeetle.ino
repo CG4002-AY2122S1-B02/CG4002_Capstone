@@ -7,6 +7,7 @@
 // * Constants
 #define NUM_SAMPLES 10
 #define START_MOVE_THRESHOLD 500
+#define POS_MOVE_THRESHOLD 90
 #define STOP_MOVE_THRESHOLD 70
 
 #define BAUD_RATE 115200
@@ -18,6 +19,7 @@
 #define RESET_PACKET 'R'
 #define DATA_PACKET 'D'
 #define EMG_PACKET 'E'
+#define POS_PACKET 'P'
 #define START_DANCE_PACKET 'S'
 #define NORMAL_DANCE_PACKET 'N'
 #define TIMESTAMP 'T'
@@ -57,9 +59,13 @@ double prevWindowAvgY = 0;
 double prevWindowAvgZ = 0;
 
 bool firstWindowDone = false;
-bool detectedMovement = false;
+bool detectedDanceMovement = false;
+bool detectedPosMovement = false;
 bool firstDancePacket = false;
 int32_t lastDetectedMoveTime;
+
+double windowDiffMin = -1e9, windowDiffMax = 1e9;
+int32_t minTime, maxTime;
 
 // * Data related global variables
 int16_t accelX;
@@ -97,12 +103,12 @@ void checkFIFO() {
 // * Function to calibrate MPU offset
 void calibrateMPUOffset() {
     // BLE 1
-//    mpu.setXAccelOffset(505);
-//    mpu.setYAccelOffset(972);
-//    mpu.setZAccelOffset(1078);
-//    mpu.setXGyroOffset(20);
-//    mpu.setYGyroOffset(26);
-//    mpu.setZGyroOffset(30);
+    mpu.setXAccelOffset(271);
+    mpu.setYAccelOffset(1047);
+    mpu.setZAccelOffset(1071);
+    mpu.setXGyroOffset(50);
+    mpu.setYGyroOffset(54);
+    mpu.setZGyroOffset(29);
 
     // BLE 2
 //        mpu.setXAccelOffset(-3114);
@@ -113,12 +119,12 @@ void calibrateMPUOffset() {
 //        mpu.setZGyroOffset(-14);
 
     // BLE 3
-        mpu.setXAccelOffset(785);
-        mpu.setYAccelOffset(-481);
-        mpu.setZAccelOffset(905);
-        mpu.setXGyroOffset(2);
-        mpu.setYGyroOffset(-22);
-        mpu.setZGyroOffset(-85);
+//         mpu.setXAccelOffset(785);
+//         mpu.setYAccelOffset(-481);
+//         mpu.setZAccelOffset(905);
+//         mpu.setXGyroOffset(2);
+//         mpu.setYGyroOffset(-22);
+//         mpu.setZGyroOffset(-85);
 
 }
 
@@ -152,8 +158,8 @@ void getAccValues() {
     curr_frame = (curr_frame + 1) % 10;
 }
 
-// * Detect start of dance move
-void detectStartMove() {
+// * Detect start of dance move or change position
+void detectStartMoveOrPosition() {
     // once curr_frame hits NUM_SAMPLES-1 (hit window size) for the first time, then can start to perform sliding window
     if (!fullWindow && curr_frame == NUM_SAMPLES - 1) fullWindow = true;
 
@@ -178,17 +184,51 @@ void detectStartMove() {
             double windowDiffY = currWindowAvgY - prevWindowAvgY;
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
 
-            if (!detectedMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
+            // ? Maybe add separate logic for positional move threshold
+            if (!detectedDanceMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
                 firstDancePacket = true;
-                detectedMovement = true;
+                detectedDanceMovement = true;
+                lastDetectedMoveTime = micros();
+            }
+            else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < POS_MOVE_THRESHOLD && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
+                detectedPosMovement = true;
                 lastDetectedMoveTime = micros();
             }
 
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
             // for about 1.5 seconds, then we will deem it that the user has stopped moving
-            if (detectedMovement) {
+            if (detectedDanceMovement) {
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
-                else if (micros() - lastDetectedMoveTime > 1500000) detectedMovement = false;
+                else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
+            }
+            else if (detectedPosMovement)
+            {
+                if (windowDiffZ < windowDiffMin)
+                {
+                    windowDiffMin = windowDiffZ;
+                    minTime = millis();
+                }
+                if (windowDiffZ > windowDiffMax)
+                {
+                    windowDiffMax = windowDiffZ;
+                    maxTime = millis();
+                }
+                
+
+                if (abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
+                else if (micros() - lastDetectedMoveTime > 1000000)
+                {
+                    if (maxTime > minTime)
+                        sendPosPacket(1);
+                    else
+                        sendPosPacket(0);
+
+                    windowDiffMin = 1e9;
+                    windowDiffMax = -1e9;
+                    maxTime = millis();
+                    minTime = millis();
+                    detectedPosMovement = false;
+                }
             }
         }
 
@@ -254,8 +294,34 @@ void (* resetBeetle) (void) = 0;
 // * |_____/|______|_| \_|_____/  |_|     \____/|_| \_|\_____|
 //
 
+// * Total 11 bytes with 9 bytes padding
+void sendPosPacket(int isLeft) {
+
+    // One byte packet type and add to CRC
+    Serial.write(POS_PACKET);
+    crc.add(POS_PACKET);
+
+    // One byte char repeated 9 times (1 == left, 0 == right)
+    for (int i = 0; i < 9; i++) {
+        if (isLeft) {
+            Serial.write('L');
+            crc.add('L');
+        } else {
+            Serial.write('R');
+            crc.add('R');
+        }
+    }
+
+    Serial.write(crc.getCRC());
+    crc.restart();
+
+    padPacket(9);
+
+    Serial.flush();
+}
+
 // * Total 6 bytes currently
-void sendACKPacket(char packetType) {
+void sendACKPacket() {
 
     // One byte packet type and add to CRC
     Serial.write(ACK_PACKET);
@@ -386,7 +452,7 @@ void loop() {
                 // Handshake starts from laptop. Reply handshake with ACK
                 handshakeStart = true;
                 handshakeEnd = false;
-                sendACKPacket(ACK_PACKET);
+                sendACKPacket();
                 Serial.flush();
                 break;
             case ACK_PACKET:
@@ -404,10 +470,10 @@ void loop() {
     }
 
     getAccValues();
-    detectStartMove();
+    detectStartMoveOrPosition();
 
     // Handshake completed
-    if (handshakeEnd && detectedMovement) {
+    if (handshakeEnd && detectedDanceMovement) {
         currentTime = millis();
 
         // Send sensor data
