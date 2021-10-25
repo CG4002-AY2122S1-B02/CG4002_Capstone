@@ -18,6 +18,7 @@ EMG = 'E'
 START_DANCE = 'S'
 NORMAL_DANCE = 'N'
 TIMESTAMP = 'T'
+POSITION = 'P'
 
 
 # * Bluetooth Data
@@ -46,13 +47,14 @@ BEETLE_REQUEST_RESET_STATUS = {
     BEETLE_3: False,
 }
 
-# ! FOR DEBUGGING AND LOGGING
+# * For counting corrupted packets
 BEETLE_CORRUPTION_NUM = {
     BEETLE_1: 0,
     BEETLE_2: 0,
     BEETLE_3: 0,
 }
 
+# * For counting okay packets
 BEETLE_OKAY_NUM = {
     BEETLE_1: 0,
     BEETLE_2: 0,
@@ -68,7 +70,6 @@ BEETLE_DANCER_ID = {
 USE_FAKE_DATA = False
 laptop_client = Laptop_client
 
-# %%
 
 # * Delegate that is attached to each Beetle peripheral
 class Delegate(DefaultDelegate):
@@ -89,6 +90,7 @@ class Delegate(DefaultDelegate):
         # Handshake completed. Handle data packets
         if (BEETLE_HANDSHAKE_STATUS[self.mac_addr]):
 
+            # * Reads the first BLE packet
             raw_packet_data = self.buffer[0: 20]
 
             # Received EMG Packet 4 bytes
@@ -102,8 +104,8 @@ class Delegate(DefaultDelegate):
                         "#DEBUG#: CRC Checksum doesn't match for %s." % self.mac_addr)
                     self.buffer = self.buffer[20:]
                     BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    return
                     # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    # return
 
                 # TODO double confirm EMG packet from Arduino
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
@@ -111,8 +113,7 @@ class Delegate(DefaultDelegate):
                 self.buffer = self.buffer[20:]
 
             # Received Data Packet 19 bytes
-            # * ASCII Code D (DATA)
-            elif (self.buffer[0] == 68 and len(self.buffer) >= 20):
+            elif (self.buffer[0] == 68 and len(self.buffer) >= 20): # * ASCII Code D (DATA)
                 data_packet_data = raw_packet_data[0: 19]
                 parsed_packet_data = struct.unpack(
                     '!chhhhhhcLc', data_packet_data)
@@ -140,17 +141,18 @@ class Delegate(DefaultDelegate):
                         "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
                     self.buffer = self.buffer[20:]
                     BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    return
                     # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    # return
 
                 # TODO change timestamp packet every 30 seconds? 1 min?
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
                 logging.info(reformatted_data)
                 self.buffer = self.buffer[20:]
 
-                logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
-                logging.info("Okay stats for %s: %s" % (self.mac_addr, BEETLE_OKAY_NUM[self.mac_addr]))
+                # logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
+                # logging.info("Okay stats for %s: %s" % (self.mac_addr, BEETLE_OKAY_NUM[self.mac_addr]))
 
+            # Recieved Position change packet 11 bytes
             elif (self.buffer[0] == 80 and len(self.buffer) >= 20): # * ASCII Code P
                 position_packet_data = raw_packet_data[0:11]
                 parsed_packet_data = struct.unpack(
@@ -163,14 +165,15 @@ class Delegate(DefaultDelegate):
                     self.buffer = self.buffer[20:]
                     BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
                     # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    # return
+                    return
 
-                # TODO send position data to ultra96
-                print(parsed_packet_data)
+                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
+                laptop_client.send_data(reformatted_data)
+                self.buffer = self.buffer[20:]
 
             # Corrupted buffer. Move forward by one byte at a time
             else:
-                # logging.info("#DEBUG#: Corrupted! Buffer %s" % (self.buffer[0:20]))
+                logging.info("#DEBUG#: Corrupted! Buffer %s" % (self.buffer[0:20]))
                 # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
                 BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
                 self.buffer = self.buffer[20:]
@@ -204,6 +207,15 @@ class Delegate(DefaultDelegate):
             # current_epoch_timestamp = self.start_of_arduino_timestamp + parsed_data[8]
             current_epoch_timestamp = time()
             reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(current_epoch_timestamp) + "|"
+
+        elif (parsed_data[0] == b'P'):
+            # Left packet
+            if b'L' in parsed_data[1:10]:
+                reformatted_data = packet_start + "L|"
+            # Right packet
+            elif b'R' in parsed_data[1:10]:
+                reformatted_data = packet_start + "R|"
+
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1]))
 
@@ -292,6 +304,7 @@ class BeetleThread():
     # * If request reset is true, reset Beetle and reinitiate handshake
     def run(self):
         try:
+            # TODO add time sync here
             while True:
                 # Break and reset
                 if BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
@@ -310,9 +323,6 @@ class BeetleThread():
             self.start_handshake()
             self.run()
 
-
-# %%
-# ! Actual main code
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description = "Setup options")
