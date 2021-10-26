@@ -324,11 +324,6 @@ class BeetleThread():
                 if BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     break
 
-                # * If time difference is more than 60 seconds, perform another time sync
-                if (time() - last_time_sync > 60):
-                    laptop_client.sync_clock()
-                    last_time_sync = time()
-
                 if self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     continue
 
