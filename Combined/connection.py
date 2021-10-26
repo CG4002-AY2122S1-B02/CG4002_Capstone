@@ -35,8 +35,8 @@ POSITION_PACKET_SIZE = 11
 
 
 # * Mac Addresses of Bluno Beetles
-BEETLE_1 = 'b0:b1:13:2d:d3:58' # Sanath
-BEETLE_2 = 'b0:b1:13:2d:b6:22' # Joshua
+BEETLE_1 = 'b0:b1:13:2d:b6:22' # Sanath
+BEETLE_2 = 'b0:b1:13:2d:d3:58' # Joshua
 BEETLE_3 = 'b0:b1:13:2d:b4:01' # Michael
 
 
