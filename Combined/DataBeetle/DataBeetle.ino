@@ -190,7 +190,7 @@ void detectStartMoveOrPosition() {
                 detectedDanceMovement = true;
                 lastDetectedMoveTime = micros();
             }
-            else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < POS_MOVE_THRESHOLD && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
+            else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 200 && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
                 detectedPosMovement = true;
                 lastDetectedMoveTime = micros();
             }
