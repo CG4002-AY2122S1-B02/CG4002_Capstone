@@ -198,6 +198,7 @@ void detectStartMoveOrPosition() {
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
             // for about 1.5 seconds, then we will deem it that the user has stopped moving
             if (detectedDanceMovement) {
+                detectedPosMovement = false;
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
                 else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
             }
