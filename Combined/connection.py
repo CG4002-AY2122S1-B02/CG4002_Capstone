@@ -35,7 +35,7 @@ POSITION_PACKET_SIZE = 11
 
 
 # * Mac Addresses of Bluno Beetles
-BEETLE_1 = 'b0:b1:13:2d:d3:58'
+BEETLE_1 = 'b0:b1:13:2d:d3:58' # THIS SHOULD BE 2
 BEETLE_2 = 'b0:b1:13:2d:b4:02'
 BEETLE_3 = 'b0:b1:13:2d:b4:01'
 
@@ -237,8 +237,6 @@ class Delegate(DefaultDelegate):
 
 class BeetleThread():
 
-    global last_time_sync
-
     def __init__(self, beetle_peripheral_object, dancer_id):
 
         self.beetle_periobj = beetle_peripheral_object
@@ -318,6 +316,8 @@ class BeetleThread():
     # * Continues watching the Beetle and check request reset flag
     # * If request reset is true, reset Beetle and reinitiate handshake
     def run(self):
+        global last_time_sync
+
         try:
             while True:
                 # Break and reset
@@ -327,6 +327,7 @@ class BeetleThread():
                 # * If time difference is more than 60 seconds, perform another time sync
                 if (time() - last_time_sync > 60):
                     laptop_client.sync_clock()
+                    last_time_sync = time()
 
                 if self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     continue
