@@ -351,7 +351,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     USE_FAKE_DATA = args.fake_data
     dancer_id = args.dancer_id
-    port_number = args.port
+    port_number = int(args.port)
 
     # * Setup Logging
     logging.basicConfig(
