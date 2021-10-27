@@ -366,7 +366,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     USE_FAKE_DATA = args.fake_data
-    IS_NOT_LOCAL_TESTING = ~(args.local)
+    IS_NOT_LOCAL_TESTING = not args.local
     IS_EMG_BEETLE = args.emg
     dancer_id = args.dancer_id
     port_number = int(args.port)
@@ -385,7 +385,7 @@ if __name__ == '__main__':
     else:
         # * Change ALL_BEETLE_MAC to only include one dancer's Beetle
         if (IS_EMG_BEETLE):
-            mac = BEETLE_DANCER_ID[4]
+            mac = BEETLE_DANCER_ID['4']
         else:
             mac = BEETLE_DANCER_ID[dancer_id]
 
