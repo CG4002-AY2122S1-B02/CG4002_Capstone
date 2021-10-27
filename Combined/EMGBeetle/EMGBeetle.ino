@@ -214,7 +214,7 @@ void loop() {
                 // Handshake starts from laptop. Reply handshake with ACK
                 handshakeStart = true;
                 handshakeEnd = false;
-                sendACKPacket(ACK_PACKET);
+                sendACKPacket();
                 Serial.flush();
                 break;
             case ACK_PACKET:
