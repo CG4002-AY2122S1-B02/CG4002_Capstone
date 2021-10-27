@@ -15,6 +15,8 @@
 #define RESET_PACKET 'R'
 #define EMG_PACKET 'E'
 
+unsigned long currentTime = 0;
+
 // * Handshake status
 bool handshakeStart = false;
 bool handshakeEnd = false;
@@ -203,6 +205,7 @@ void setup() {
 }
 
 void loop() {
+    currentTime = millis();
     if (Serial.available()) {
         byte packetType = Serial.read();
 
