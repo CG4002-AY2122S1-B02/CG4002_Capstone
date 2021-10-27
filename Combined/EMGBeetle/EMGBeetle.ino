@@ -13,16 +13,7 @@
 #define HELLO_PACKET 'H'
 #define ACK_PACKET 'A'
 #define RESET_PACKET 'R'
-#define DATA_PACKET 'D'
 #define EMG_PACKET 'E'
-#define START_DANCE_PACKET 'S' // TODO yet to be implemented
-#define TIMESTAMP 'T'
-
-// * Time related global variables
-unsigned long currentTime = 0;
-unsigned long previousPacketTime = 0;
-unsigned long previousEMGPacketTime = 0;
-unsigned long previousTimestampPacketTime = 0;
 
 // * Handshake status
 bool handshakeStart = false;
@@ -35,6 +26,10 @@ uint32_t prevMicros = 0;
 double vReal[WINDOW_SIZE];
 double vImag[WINDOW_SIZE];
 
+double MeanAbsValue;
+double RootMeanSqValue;
+double MeanFreq;
+double MedianFreq;
 int16_t emgData;
 
 // * Buffer related
@@ -43,6 +38,51 @@ byte fourByteBuf[4];
 
 // * CRC Related
 CRC8 crc;
+
+
+// *   _____ ______ _   _ _____    ______ _    _ _   _  _____
+// *  / ____|  ____| \ | |  __ \  |  ____| |  | | \ | |/ ____|
+// * | (___ | |__  |  \| | |  | | | |__  | |  | |  \| | |
+// *  \___ \|  __| | . ` | |  | | |  __| | |  | | . ` | |
+// *  ____) | |____| |\  | |__| | | |    | |__| | |\  | |____
+// * |_____/|______|_| \_|_____/  |_|     \____/|_| \_|\_____|
+//
+
+// * Total 2 bytes currently
+void sendACKPacket(char packetType) {
+
+    // One byte packet type and add to CRC
+    Serial.write(ACK_PACKET);
+    crc.add(ACK_PACKET);
+
+    Serial.write(crc.getCRC()); // One byte checksum
+
+    crc.restart(); // Restart crc caclulation
+}
+
+// * Total 10 bytes + 10 bytes padding
+// * MeanAbsValue (4 bytes) and RootMeanSqValue (4 bytes)
+void sendEMGPacket() {
+    long convertedMeanAbsValue = (long) (MeanAbsValue * 10000);
+    long convertedRootMeanSqValue = (long) (RootMeanSqValue * 10000);
+
+    // One byte packet type and add to CRC
+    Serial.write(EMG_PACKET);
+    crc.add(EMG_PACKET);
+
+    // 8 bytes EMG data
+    writeLongToSerial(convertedMeanAbsValue);
+    writeLongToSerial(convertedRootMeanSqValue);
+
+    Serial.write(crc.getCRC()); // One byte checksum
+
+    // Padding
+    padPacket(10);
+
+    crc.restart();
+
+    Serial.flush();
+}
 
 // *   _    _      _                   ______
 // * | |  | |    | |                 |  ____|
@@ -78,8 +118,8 @@ void collectData() {
         }
     }
 
-    double MeanAbsValue = totalAbsValue / (double) WINDOW_SIZE;
-    double RootMeanSqValue = sqrt(totalSqValue / (double)WINDOW_SIZE);
+    MeanAbsValue = totalAbsValue / (double) WINDOW_SIZE;
+    RootMeanSqValue = sqrt(totalSqValue / (double)WINDOW_SIZE);
 }
 
 // * Function to convert time domain to frequency domain using FFT
@@ -103,6 +143,7 @@ void calculateFFT() {
         totalFreqPSD += (currFreq * currPSD);
     }
 
+    // ! meanFreq and medianFreq currently not used yet
     double meanFreq = totalFreqPSD / totalPSD;
     meanFreq -= 1;
     meanFreq *= 100;
@@ -125,8 +166,8 @@ void writeIntToSerial(int16_t data) {
     crc.add(twoByteBuf, sizeof(twoByteBuf));
 }
 
-// * Write 4 byte unsigned long (timestamp) to Serial
-void writeLongToSerial(unsigned long data) {
+// * Write 4 byte long to Serial
+void writeLongToSerial(long data) {
     fourByteBuf[3] = data & 255;
     fourByteBuf[2] = (data >> 8) & 255;
     fourByteBuf[1] = (data >> 16) & 255;
@@ -145,74 +186,6 @@ void padPacket(int length) {
     }
 }
 
-// ? Read data from EMG sensors (IN THE FUTURE)
-// * Generate fake EMG data
-void readEMGData() {
-    // ? Random generation of data
-    emgData = random(0, 1023);
-    // emgData = 200;
-}
-
-// *   _____ ______ _   _ _____    ______ _    _ _   _  _____
-// *  / ____|  ____| \ | |  __ \  |  ____| |  | | \ | |/ ____|
-// * | (___ | |__  |  \| | |  | | | |__  | |  | |  \| | |
-// *  \___ \|  __| | . ` | |  | | |  __| | |  | | . ` | |
-// *  ____) | |____| |\  | |__| | | |    | |__| | |\  | |____
-// * |_____/|______|_| \_|_____/  |_|     \____/|_| \_|\_____|
-//
-
-// * Total 2 bytes currently
-void sendACKPacket(char packetType) {
-
-    // One byte packet type and add to CRC
-    Serial.write(ACK_PACKET);
-    crc.add(ACK_PACKET);
-
-    Serial.write(crc.getCRC()); // One byte checksum
-
-    crc.restart(); // Restart crc caclulation
-}
-
-// * Total 4 bytes + 16 bytes padding
-// TODO decide what data to send for EMG
-void sendEMGPacket() {
-
-    // One byte packet type and add to CRC
-    Serial.write(EMG_PACKET);
-    crc.add(EMG_PACKET);
-
-    // ! Remember to change this to actual reading in the future
-    readEMGData();
-
-    // 2 bytes EMG data
-    writeIntToSerial(emgData);
-
-    Serial.write(crc.getCRC()); // One byte checksum
-
-    // Padding
-    padPacket(16);
-
-    crc.restart();
-}
-
-// * Total 6 bytes + 14 bytes padding
-void sendTimestampPacket() {
-
-    // One byte packet type and add to CRC
-    Serial.write(TIMESTAMP);
-    crc.add(TIMESTAMP);
-
-    // 4 bytes timestamp data
-    writeLongToSerial(currentTime);
-
-    Serial.write(crc.getCRC()); // One byte checksum
-
-    // Padding
-    padPacket(14);
-
-    crc.restart();
-}
-
 
 // *                    _       _               ______
 // *     /\           | |     (_)             |  ____|
@@ -223,13 +196,7 @@ void sendTimestampPacket() {
 
 // * Initialization
 void setup() {
-
     Serial.begin(BAUD_RATE);
-
-    currentTime = 0;
-    previousPacketTime = 0;
-    previousEMGPacketTime = 0;
-    previousTimestampPacketTime = 0;
 }
 
 void loop() {
@@ -259,21 +226,9 @@ void loop() {
 
     // Handshake completed
     if (handshakeEnd) {
-        currentTime = millis();
 
-        // Send EMG Packet Data
-        if (currentTime - previousEMGPacketTime > EMG_SAMPLING_PERIOD) {
-            sendEMGPacket();
-            Serial.flush();
-            previousEMGPacketTime = currentTime;
-        }
-
-        // Send timestamp packet for synchronisation
-        if (currentTime - previousTimestampPacketTime > TIMESTAMP_PERIOD) {
-            sendTimestampPacket();
-            Serial.flush();
-            previousTimestampPacketTime = currentTime;
-        }
+        collectData();
+        calculateFFT();
 
     }
 
