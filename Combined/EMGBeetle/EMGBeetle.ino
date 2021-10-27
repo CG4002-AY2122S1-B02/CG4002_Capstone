@@ -48,12 +48,15 @@ CRC8 crc;
 // * |_____/|______|_| \_|_____/  |_|     \____/|_| \_|\_____|
 //
 
-// * Total 2 bytes currently
-void sendACKPacket(char packetType) {
+// * Total 6 bytes currently
+void sendACKPacket() {
 
     // One byte packet type and add to CRC
     Serial.write(ACK_PACKET);
     crc.add(ACK_PACKET);
+
+    // 4 bytes timestamp data
+    writeLongToSerial(currentTime);
 
     Serial.write(crc.getCRC()); // One byte checksum
 
