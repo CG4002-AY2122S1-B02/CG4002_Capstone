@@ -29,7 +29,7 @@ IP_ADDR = '127.0.0.1'
 # For local testing
 # PORT_NUM = 7000
 # For actual production
-PORT_NUMS = [8001,8002,8003]
+PORT_NUMS = [8001,8002,8003,8004]
 GROUP_ID = 2
 SECRET_KEY = 'cg40024002group2'
 

@@ -310,7 +310,7 @@ class BeetleThread():
         logging.info("Attempting reconnection with %s" %
                      self.beetle_periobj.addr)
 
-        reconnection_external_packet = "#R|" + self.dancer_id + "|"
+        reconnection_external_packet = "#R|" + str(self.dancer_id) + "|"
 
         if (IS_NOT_LOCAL_TESTING):
             laptop_client.send_data(reconnection_external_packet)
@@ -382,7 +382,10 @@ if __name__ == '__main__':
     )
 
     if (IS_NOT_LOCAL_TESTING):
-        laptop_client = Laptop_client.main(dancer_id, port_number)
+        if (IS_EMG_BEETLE):
+            laptop_client = Laptop_client.main(4, port_number)
+        else:
+            laptop_client = Laptop_client.main(dancer_id, port_number)
 
     if (USE_FAKE_DATA):
         laptop_client.manage_bluno_data()
