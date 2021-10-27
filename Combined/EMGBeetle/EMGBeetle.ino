@@ -235,6 +235,7 @@ void loop() {
 
         collectData();
         calculateFFT();
+        sendEMGPacket();
 
     }
 
