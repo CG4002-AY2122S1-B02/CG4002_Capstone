@@ -110,7 +110,7 @@ class Delegate(DefaultDelegate):
             # * Reads the first BLE packet
             raw_packet_data = self.buffer[0: BLE_PACKET_SIZE]
 
-            # Received EMG Packet 4 bytes
+            # Received EMG Packet 10 bytes
             if (self.buffer[0] == ord(EMG) and len(self.buffer) >= BLE_PACKET_SIZE):  # * ASCII Code E (EMG)
                 emg_packet_data = raw_packet_data[0: EMG_PACKET_SIZE]
                 parsed_packet_data = struct.unpack(
@@ -243,6 +243,10 @@ class Delegate(DefaultDelegate):
             # Right packet
             elif RIGHT_POS in parsed_data[1:10]:
                 reformatted_data = packet_start + "R|"
+
+        elif (parsed_data[0] == EMG):
+            converted_values = list(map(lambda i : i // 10000, parsed_data[1:-1]))
+            reformatted_data = packet_start + "|".join(map(str, converted_values)) + "|"
 
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1])) + "|"
