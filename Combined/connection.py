@@ -155,20 +155,20 @@ class Delegate(DefaultDelegate):
             # Received Timestamp packet 6 bytes
             # ! Currently unused
             elif (self.buffer[0] == ord(TIMESTAMP) and len(self.buffer) >= BLE_PACKET_SIZE):  # * ASCII Code T
-                timestamp_packet_data = raw_packet_data[0: TIMESTAMP_PACKET_SIZE]
-                parsed_packet_data = struct.unpack(
-                    '!cLc', timestamp_packet_data)
+                # timestamp_packet_data = raw_packet_data[0: TIMESTAMP_PACKET_SIZE]
+                # parsed_packet_data = struct.unpack(
+                #     '!cLc', timestamp_packet_data)
 
-                if not self.checkCRC(TIMESTAMP_PACKET_SIZE - 1):
-                    logging.info(
-                        "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    self.buffer = self.buffer[BLE_PACKET_SIZE:]
-                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
-                    return
+                # if not self.checkCRC(TIMESTAMP_PACKET_SIZE - 1):
+                #     logging.info(
+                #         "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
+                #     self.buffer = self.buffer[BLE_PACKET_SIZE:]
+                #     BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                #     return
                     # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
 
-                reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                logging.info("#DEBUG#: Arduino Timestamp Packet %s" % reformatted_data)
+                # reformatted_data = self.formatDataForUltra96(parsed_packet_data)
+                # logging.info("#DEBUG#: Arduino Timestamp Packet %s" % reformatted_data)
                 self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
                 # logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
