@@ -38,13 +38,15 @@ POSITION_PACKET_SIZE = 11
 BEETLE_1 = 'b0:b1:13:2d:b6:22' # Sanath
 BEETLE_2 = 'b0:b1:13:2d:d3:58' # Joshua
 BEETLE_3 = 'b0:b1:13:2d:b4:01' # Michael
+EMG_BEETLE = '34:15:13:22:a1:23' # FOR EMG
 
 
 # * Handshake status of Beetles
 BEETLE_HANDSHAKE_STATUS = {
     BEETLE_1: False,
     BEETLE_2: False,
-    BEETLE_3: False
+    BEETLE_3: False,
+    EMG_BEETLE: False,
 }
 
 # * Requesting Reset status of Beetles
@@ -52,6 +54,7 @@ BEETLE_REQUEST_RESET_STATUS = {
     BEETLE_1: False,
     BEETLE_2: False,
     BEETLE_3: False,
+    EMG_BEETLE: False,
 }
 
 # * For counting corrupted packets
@@ -59,6 +62,7 @@ BEETLE_CORRUPTION_NUM = {
     BEETLE_1: 0,
     BEETLE_2: 0,
     BEETLE_3: 0,
+    EMG_BEETLE: 0,
 }
 
 # * For counting okay packets
@@ -66,16 +70,19 @@ BEETLE_OKAY_NUM = {
     BEETLE_1: 0,
     BEETLE_2: 0,
     BEETLE_3: 0,
+    EMG_BEETLE: 0,
 }
 
 BEETLE_DANCER_ID = {
     '1': BEETLE_1,
     '2': BEETLE_2,
-    '3': BEETLE_3
+    '3': BEETLE_3,
+    '4': EMG_BEETLE
 }
 
 USE_FAKE_DATA = False
 laptop_client = Laptop_client
+IS_NOT_LOCAL_TESTING = True
 last_time_sync = 0
 
 
@@ -118,7 +125,10 @@ class Delegate(DefaultDelegate):
                     # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                laptop_client.send_data(reformatted_data)
+
+                if (IS_NOT_LOCAL_TESTING):
+                    laptop_client.send_data(reformatted_data)
+
                 self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
             # Received Data Packet 19 bytes
@@ -136,7 +146,10 @@ class Delegate(DefaultDelegate):
                     # return
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                laptop_client.send_data(reformatted_data)
+
+                if (IS_NOT_LOCAL_TESTING):
+                    laptop_client.send_data(reformatted_data)
+
                 self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
             # Received Timestamp packet 6 bytes
@@ -177,7 +190,9 @@ class Delegate(DefaultDelegate):
                     return
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                laptop_client.send_data(reformatted_data)
+
+                if (IS_NOT_LOCAL_TESTING):
+                    laptop_client.send_data(reformatted_data)
                 self.buffer = self.buffer[BLE_PACKET_SIZE:]
 
             # Corrupted buffer. Move forward by one byte at a time
@@ -198,7 +213,9 @@ class Delegate(DefaultDelegate):
                          self.mac_addr)
 
             last_time_sync = time()
-            laptop_client.sync_clock()
+
+            if (IS_NOT_LOCAL_TESTING):
+                laptop_client.sync_clock()
         else:
             BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
 
@@ -290,7 +307,9 @@ class BeetleThread():
                      self.beetle_periobj.addr)
 
         reconnection_external_packet = "#R|" + self.dancer_id + "|"
-        laptop_client.send_data(reconnection_external_packet)
+
+        if (IS_NOT_LOCAL_TESTING):
+            laptop_client.send_data(reconnection_external_packet)
 
         try:
             self.beetle_periobj.disconnect()
@@ -341,9 +360,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = "Setup options")
     parser.add_argument('-f', '--fake-data', default = False, action='store_true', help = 'fake_data')
     parser.add_argument('-id', '--dancer-id', default = 1, help = 'dancer id')
+    parser.add_argument('-e', '--emg', default = False, action='store_true', help = 'Toggle for EMG beetle')
+    parser.add_argument('-l', '--local', default = False, action='store_true', help = 'For local testing')
     parser.add_argument('-p', '--port', default = 7000, help = 'port number')
+
     args = parser.parse_args()
     USE_FAKE_DATA = args.fake_data
+    IS_NOT_LOCAL_TESTING = ~(args.local)
+    IS_EMG_BEETLE = args.emg
     dancer_id = args.dancer_id
     port_number = int(args.port)
 
@@ -353,13 +377,18 @@ if __name__ == '__main__':
         level=logging.INFO
     )
 
-    laptop_client = Laptop_client.main(dancer_id, port_number)
+    if (IS_NOT_LOCAL_TESTING):
+        laptop_client = Laptop_client.main(dancer_id, port_number)
 
     if (USE_FAKE_DATA):
         laptop_client.manage_bluno_data()
     else:
         # * Change ALL_BEETLE_MAC to only include one dancer's Beetle
-        mac = BEETLE_DANCER_ID[dancer_id]
+        if (IS_EMG_BEETLE):
+            mac = BEETLE_DANCER_ID[4]
+        else:
+            mac = BEETLE_DANCER_ID[dancer_id]
+
         try:
             beetle = Peripheral(mac)
             beetle.withDelegate(Delegate(mac, dancer_id))
