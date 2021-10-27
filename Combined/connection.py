@@ -245,7 +245,7 @@ class Delegate(DefaultDelegate):
                 reformatted_data = packet_start + "R|"
 
         elif (parsed_data[0] == EMG):
-            converted_values = list(map(lambda i : i // 10000, parsed_data[1:-1]))
+            converted_values = list(map(lambda i : i // 100, parsed_data[1:-1]))
             reformatted_data = packet_start + "|".join(map(str, converted_values)) + "|"
 
         else:

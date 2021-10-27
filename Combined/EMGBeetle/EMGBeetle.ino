@@ -68,8 +68,8 @@ void sendACKPacket() {
 // * Total 10 bytes + 10 bytes padding
 // * MeanAbsValue (4 bytes) and RootMeanSqValue (4 bytes)
 void sendEMGPacket() {
-    long convertedMeanAbsValue = (long) (MeanAbsValue * 10000);
-    long convertedRootMeanSqValue = (long) (RootMeanSqValue * 10000);
+    long convertedMeanAbsValue = (long) (MeanAbsValue * 100);
+    long convertedRootMeanSqValue = (long) (RootMeanSqValue * 100);
 
     // One byte packet type and add to CRC
     Serial.write(EMG_PACKET);
