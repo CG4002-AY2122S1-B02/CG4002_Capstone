@@ -110,11 +110,11 @@ class Delegate(DefaultDelegate):
             # * Reads the first BLE packet
             raw_packet_data = self.buffer[0: BLE_PACKET_SIZE]
 
-            # Received EMG Packet 10 bytes
+            # Received EMG Packet 6 bytes
             if (self.buffer[0] == ord(EMG) and len(self.buffer) >= BLE_PACKET_SIZE):  # * ASCII Code E (EMG)
                 emg_packet_data = raw_packet_data[0: EMG_PACKET_SIZE]
                 parsed_packet_data = struct.unpack(
-                    '!cllc', emg_packet_data)
+                    '!chhc', emg_packet_data)
 
                 if not self.checkCRC(EMG_PACKET_SIZE - 1):
                     logging.info(
@@ -245,8 +245,9 @@ class Delegate(DefaultDelegate):
                 reformatted_data = packet_start + "R|"
 
         elif (parsed_data[0] == EMG):
-            converted_values = list(map(lambda i : i // 100, parsed_data[1:-1]))
-            reformatted_data = packet_start + "|".join(map(str, converted_values)) + "|"
+            # converted_values = list(map(lambda i : i // 100, parsed_data[1:-1]))
+            # reformatted_data = packet_start + "|".join(map(str, converted_values)) + "|"
+            reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1])) + "|"
 
         else:
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -1])) + "|"

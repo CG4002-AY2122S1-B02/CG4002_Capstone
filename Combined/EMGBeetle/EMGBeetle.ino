@@ -65,24 +65,24 @@ void sendACKPacket() {
     crc.restart(); // Restart crc caclulation
 }
 
-// * Total 10 bytes + 10 bytes padding
-// * MeanAbsValue (4 bytes) and RootMeanSqValue (4 bytes)
+// * Total 6 bytes + 14 bytes padding
+// * MeanAbsValue (2 bytes) and RootMeanSqValue (2 bytes)
 void sendEMGPacket() {
-    long convertedMeanAbsValue = (long) (MeanAbsValue * 100);
-    long convertedRootMeanSqValue = (long) (RootMeanSqValue * 100);
+    int convertedMeanAbsValue = (int) (MeanAbsValue);
+    int convertedRootMeanSqValue = (int) (RootMeanSqValue);
 
     // One byte packet type and add to CRC
     Serial.write(EMG_PACKET);
     crc.add(EMG_PACKET);
 
-    // 8 bytes EMG data
-    writeLongToSerial(convertedMeanAbsValue);
-    writeLongToSerial(convertedRootMeanSqValue);
+    // 4 bytes EMG data
+    writeIntToSerial(convertedMeanAbsValue);
+    writeIntToSerial(convertedRootMeanSqValue);
 
     Serial.write(crc.getCRC()); // One byte checksum
 
     // Padding
-    padPacket(10);
+    padPacket(14);
 
     crc.restart();
 
