@@ -260,13 +260,23 @@ class BeetleThread():
 
     def __init__(self, beetle_peripheral_object, dancer_id):
 
-        self.beetle_periobj = beetle_peripheral_object
-        self.dancer_id = dancer_id
-        self.serial_service = self.beetle_periobj.getServiceByUUID(
-            BLE_SERVICE_UUID)
-        self.serial_characteristic = self.serial_service.getCharacteristics()[
-            0]
-        self.start_handshake()
+        try:
+            self.beetle_periobj = beetle_peripheral_object
+            self.dancer_id = dancer_id
+            self.serial_service = self.beetle_periobj.getServiceByUUID(
+                BLE_SERVICE_UUID)
+            self.serial_characteristic = self.serial_service.getCharacteristics()[
+                0]
+            self.start_handshake()
+        except:
+            sleep(5)
+            self.beetle_periobj = beetle_peripheral_object
+            self.dancer_id = dancer_id
+            self.serial_service = self.beetle_periobj.getServiceByUUID(
+                BLE_SERVICE_UUID)
+            self.serial_characteristic = self.serial_service.getCharacteristics()[
+                0]
+            self.start_handshake()
 
     # * Initiate the start of handshake sequence with Beetle
     def start_handshake(self):
