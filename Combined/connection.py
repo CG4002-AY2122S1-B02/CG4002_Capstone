@@ -384,6 +384,7 @@ if __name__ == '__main__':
 
     if (IS_NOT_LOCAL_TESTING):
         if (IS_EMG_BEETLE):
+            dancer_id = 4
             laptop_client = Laptop_client.main(4, port_number)
         else:
             laptop_client = Laptop_client.main(dancer_id, port_number)
