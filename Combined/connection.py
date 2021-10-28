@@ -259,14 +259,22 @@ class Delegate(DefaultDelegate):
 class BeetleThread():
 
     def __init__(self, beetle_peripheral_object, dancer_id):
-
         self.beetle_periobj = beetle_peripheral_object
         self.dancer_id = dancer_id
-        self.serial_service = self.beetle_periobj.getServiceByUUID(
-            BLE_SERVICE_UUID)
-        self.serial_characteristic = self.serial_service.getCharacteristics()[
-            0]
-        self.start_handshake()
+
+        try:
+            self.serial_service = self.beetle_periobj.getServiceByUUID(
+                BLE_SERVICE_UUID)
+            self.serial_characteristic = self.serial_service.getCharacteristics()[
+                0]
+            self.start_handshake()
+        except:
+            sleep(5)
+            self.serial_service = self.beetle_periobj.getServiceByUUID(
+                BLE_SERVICE_UUID)
+            self.serial_characteristic = self.serial_service.getCharacteristics()[
+                0]
+            self.start_handshake()
 
     # * Initiate the start of handshake sequence with Beetle
     def start_handshake(self):
@@ -384,6 +392,7 @@ if __name__ == '__main__':
 
     if (IS_NOT_LOCAL_TESTING):
         if (IS_EMG_BEETLE):
+            dancer_id = 4
             laptop_client = Laptop_client.main(4, port_number)
         else:
             laptop_client = Laptop_client.main(dancer_id, port_number)
