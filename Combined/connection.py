@@ -214,7 +214,7 @@ class Delegate(DefaultDelegate):
 
             last_time_sync = time()
 
-            if (IS_NOT_LOCAL_TESTING):
+            if (IS_NOT_LOCAL_TESTING and not IS_EMG_BEETLE):
                 laptop_client.sync_clock()
         else:
             BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
