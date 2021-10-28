@@ -259,10 +259,10 @@ class Delegate(DefaultDelegate):
 class BeetleThread():
 
     def __init__(self, beetle_peripheral_object, dancer_id):
+        self.beetle_periobj = beetle_peripheral_object
+        self.dancer_id = dancer_id
 
         try:
-            self.beetle_periobj = beetle_peripheral_object
-            self.dancer_id = dancer_id
             self.serial_service = self.beetle_periobj.getServiceByUUID(
                 BLE_SERVICE_UUID)
             self.serial_characteristic = self.serial_service.getCharacteristics()[
@@ -270,8 +270,6 @@ class BeetleThread():
             self.start_handshake()
         except:
             sleep(5)
-            self.beetle_periobj = beetle_peripheral_object
-            self.dancer_id = dancer_id
             self.serial_service = self.beetle_periobj.getServiceByUUID(
                 BLE_SERVICE_UUID)
             self.serial_characteristic = self.serial_service.getCharacteristics()[
