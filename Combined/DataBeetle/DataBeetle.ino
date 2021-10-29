@@ -64,7 +64,7 @@ bool detectedPosMovement = false;
 bool firstDancePacket = false;
 int32_t lastDetectedMoveTime;
 
-double windowDiffMin = -1e9, windowDiffMax = 1e9;
+double windowDiffMin = 1e9, windowDiffMax = -1e9;
 int32_t minTime, maxTime;
 
 // * Data related global variables
