@@ -75,6 +75,10 @@ int16_t rotX;
 int16_t rotY;
 int16_t rotZ;
 
+float prevZ;
+int left = 0;
+int right = 0;
+
 // * Buffer related
 byte twoByteBuf[2];
 byte fourByteBuf[4];
@@ -193,6 +197,8 @@ void detectStartMoveOrPosition() {
             else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 200 && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
                 detectedPosMovement = true;
                 lastDetectedMoveTime = micros();
+
+                prevZ = accelZ;
             }
 
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
@@ -204,33 +210,52 @@ void detectStartMoveOrPosition() {
             }
             else if (detectedPosMovement)
             {
-                if (windowDiffZ < windowDiffMin)
-                {
-                    windowDiffMin = windowDiffZ;
-                    minTime = millis();
+                if (accelZ < prevZ && left == 0) {
+                    right++;
                 }
-                if (windowDiffZ > windowDiffMax)
-                {
-                    windowDiffMax = windowDiffZ;
-                    maxTime = millis();
+                else if (accelZ < prevZ && right == 0) {
+                    left++;
                 }
-                
-
-                if (abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
-                else if (micros() - lastDetectedMoveTime > 1000000)
-                {
-                    if (maxTime > minTime)
-                        sendPosPacket(1);
-                    else
-                        sendPosPacket(0);
-
-                    windowDiffMin = 1e9;
-                    windowDiffMax = -1e9;
-                    maxTime = millis();
-                    minTime = millis();
-                    detectedPosMovement = false;
+                else {
+                    right = 0;
+                    left = 0;
+                }
+                prevZ = accelZ;
+                if (left >= 5) {
+                    sendPosPacket(1);
+                }
+                else if (right >= 5) {
+                    sendPosPacket(0);
                 }
             }
+
+                // if (windowDiffZ < windowDiffMin)
+                // {
+                //     windowDiffMin = windowDiffZ;
+                //     minTime = millis();
+                // }
+                // if (windowDiffZ > windowDiffMax)
+                // {
+                //     windowDiffMax = windowDiffZ;
+                //     maxTime = millis();
+                // }
+
+
+                // if (abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
+                // else if (micros() - lastDetectedMoveTime > 1000000)
+                // {
+                //     if (maxTime > minTime)
+                //         sendPosPacket(1);
+                //     else
+                //         sendPosPacket(0);
+
+                //     windowDiffMin = 1e9;
+                //     windowDiffMax = -1e9;
+                //     maxTime = millis();
+                //     minTime = millis();
+                //     detectedPosMovement = false;
+                // }
+            // }
         }
 
         // replace values for the next loop
