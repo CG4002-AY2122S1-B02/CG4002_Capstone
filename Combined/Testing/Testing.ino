@@ -6,7 +6,7 @@
 
 #define NUM_SAMPLES 10
 #define START_DANCE_THRESHOLD 500
-#define POS_MOVE_THRESHOLD 90
+#define POS_MOVE_THRESHOLD 120
 #define STOP_MOVE_THRESHOLD 70
 
 MPU6050 mpu;
@@ -28,16 +28,21 @@ float ypr[3];                   // [yaw, pitch, roll]   yaw/pitch/roll container
 int16_t AccX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in X axis. Acts like a window
 int16_t AccY[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Y axis. Acts like a window
 int16_t AccZ[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Z axis. Acts like a window
+int16_t RotX[NUM_SAMPLES];
 int curr_frame = 0;             // Used to indicate which frame of the window we are going to be placing the values in
 bool fullWindow = false;
 double prevWindowAvgX = 0;
 double prevWindowAvgY = 0;
 double prevWindowAvgZ = 0;
+double prevWindowAvgRotX = 0;
 
 bool firstWindowDone = false;
 bool detectedDanceMovement = false;
 bool detectedPosMovement = false;
 int32_t lastDetectedMoveTime;
+int32_t lastDetectedPosTime;
+int32_t posStartTime;
+bool positionDetected = false;
 
 double windowDiffMin = 1e9, windowDiffMax = -1e9;
 int32_t minTime, maxTime;
@@ -50,7 +55,7 @@ int16_t rotX;
 int16_t rotY;
 int16_t rotZ;
 
-float prevZ;
+// int16_t prevZ;
 int left = 0;
 int right = 0;
 
@@ -92,6 +97,19 @@ void getAccValues() {
     rotX = (int) (ypr[0] * 10000);
     rotY = (int) (ypr[1] * 10000);
     rotZ = (int) (ypr[2] * 10000);
+    RotX[curr_frame] = rotX;
+
+//    Serial.print(gyroX);
+//    Serial.print(" ");
+//    Serial.print(gyroY);
+//    Serial.print(" ");
+//    Serial.println(gyroZ);
+
+//    Serial.println(rotX);
+//    Serial.print(" ");
+//    Serial.print(rotY);
+//    Serial.print(" ");
+//    Serial.println(rotZ);
 
     //    Serial.print("with gravity: ");
     //    Serial.print(aa.x);
@@ -132,12 +150,12 @@ void calibrateMPUOffset() {
 //    mpu.setZGyroOffset(29);
 
     // BLE 2
-//        mpu.setXAccelOffset(-3553);
-//        mpu.setYAccelOffset(599);
-//        mpu.setZAccelOffset(1346);
-//        mpu.setXGyroOffset(34);
-//        mpu.setYGyroOffset(161);
-//        mpu.setZGyroOffset(-12);
+    mpu.setXAccelOffset(-3553);
+    mpu.setYAccelOffset(599);
+    mpu.setZAccelOffset(1346);
+    mpu.setXGyroOffset(34);
+    mpu.setYGyroOffset(161);
+    mpu.setZGyroOffset(-12);
 
     // BLE 3
 //        mpu.setXAccelOffset(579);
@@ -146,14 +164,6 @@ void calibrateMPUOffset() {
 //        mpu.setXGyroOffset(18);
 //        mpu.setYGyroOffset(-43);
 //        mpu.setZGyroOffset(-80);
-
-// extra beetle for jerry
-    mpu.setXAccelOffset(1154);
-    mpu.setYAccelOffset(-767);
-    mpu.setZAccelOffset(966);
-    mpu.setXGyroOffset(46);
-    mpu.setYGyroOffset(72);
-    mpu.setZGyroOffset(17);
 
 }
 
@@ -169,73 +179,106 @@ void detectStartMove() {
         double totalAccX = 0;
         double totalAccY = 0;
         double totalAccZ = 0;
+        double totalRotX = 0;
         for (int i = 0; i < NUM_SAMPLES; i++) {
             totalAccX += AccX[i];
             totalAccY += AccY[i];
             totalAccZ += AccZ[i];
+            totalRotX += RotX[i];
         }
 
         double currWindowAvgX = totalAccX / (double)NUM_SAMPLES;
         double currWindowAvgY = totalAccY / (double)NUM_SAMPLES;
         double currWindowAvgZ = totalAccZ / (double)NUM_SAMPLES;
+        double currWindowAvgRotX = totalRotX / (double)NUM_SAMPLES;
 
         // only need to calculate difference between previous and current window average after we have taken the first window
         if (firstWindowDone) {
             double windowDiffX = currWindowAvgX - prevWindowAvgX;
             double windowDiffY = currWindowAvgY - prevWindowAvgY;
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
-           Serial.print(windowDiffX);
-           Serial.print(" ");
-           Serial.print(windowDiffY);
-           Serial.print(" ");
-           Serial.println(windowDiffZ);
+            double windowDiffRotX = currWindowAvgRotX - prevWindowAvgRotX;
+        //    Serial.print(windowDiffX);
+        //    Serial.print(" ");
+        //    Serial.print(windowDiffY);
+        //    Serial.print(" ");
+        //    Serial.println(windowDiffZ);
+//            Serial.println(windowDiffRotX);
 
             if (!detectedDanceMovement && (abs(windowDiffX) > START_DANCE_THRESHOLD || abs(windowDiffY) > START_DANCE_THRESHOLD || abs(windowDiffZ) > START_DANCE_THRESHOLD)) {
                 detectedDanceMovement = true;
                 lastDetectedMoveTime = micros();
             }
-            else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 200 && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
+            else if (!detectedDanceMovement && !detectedPosMovement && ((abs(windowDiffX) < 120 && abs(windowDiffY) < 220 && abs(windowDiffZ) > 120) || (abs(windowDiffRotX > 180)))){
                 detectedPosMovement = true;
-                lastDetectedMoveTime = micros();
+                lastDetectedPosTime = micros();
+                posStartTime = millis();
 
-                prevZ = accelZ;
+                // prevZ = accelZ;
             }
 
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
             // for about 1.5 seconds, then we will deem it that the user has stopped moving
             if (detectedDanceMovement) {
-               Serial.println("dance in progress...");
+                Serial.println("dance in progress...");
+                positionDetected = false;
                 detectedPosMovement = false;
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
                 else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
             }
             else if (detectedPosMovement)
             {
+                if (positionDetected) return;
                 Serial.println("STARTING POSITION DETECTION");
                 Serial.print(left);
                 Serial.print(' ');
                 Serial.println(right);
-                if (accelZ < prevZ && right == 0) {
+                if ((windowDiffRotX < -150) && right == 0) {
                     left++;
                 }
-                else if (accelZ > prevZ && left == 0) {
+                else if ((windowDiffRotX > 150) && left == 0) {
                     right++;
                 }
                 else {
-                    right = 0;
                     left = 0;
-                }
-                prevZ = accelZ;
-                if (left >= 5) {
-                    Serial.println("DETECTED LEFT");
-                    detectedPosMovement = false;
-                    delay(1500);
+                    right = 0;
+                    if (millis() - posStartTime > 2500) {
+                        detectedPosMovement = false;
+                    }
                 }
 
-                else if (right >= 5) {
-                    Serial.println("DETECTED RIGHT");
+                
+//                if ((accelZ < prevZ) && right == 0) {
+//                    left++;
+//                }
+//                else if ((accelZ > prevZ) && left == 0) {
+//                    right++;
+//                }
+//                else {
+//                    right = 0;
+//                    left = 0;
+//                    if (millis() - posStartTime > 2500) {
+//                      detectedPosMovement = false;
+//                    }
+//                }
+                // prevZ = accelZ;
+
+                if (left >= 4) {
+                    left = 0;
+                    right = 0;
+                    Serial.println("##### DETECTED LEFT #####");
                     detectedPosMovement = false;
-                    delay(1500);
+                    positionDetected = true;
+                    delay(3000);
+                }
+
+                else if (right >= 4) {
+                    left = 0;
+                    right = 0;
+                    Serial.println("##### DETECTED RIGHT #####");
+                    detectedPosMovement = false;
+                    positionDetected = true;
+                    delay(3000);
                 }
             }
         }
@@ -244,6 +287,7 @@ void detectStartMove() {
         prevWindowAvgX = currWindowAvgX;
         prevWindowAvgY = currWindowAvgY;
         prevWindowAvgZ = currWindowAvgZ;
+        prevWindowAvgRotX = currWindowAvgRotX;
         firstWindowDone = true;
     }
 }
