@@ -105,12 +105,12 @@ void calibrateMPUOffset() {
 //    mpu.setZGyroOffset(30);
 
     // BLE 2
-    mpu.setXAccelOffset(-3393);
-    mpu.setYAccelOffset(468);
-    mpu.setZAccelOffset(1360);
-    mpu.setXGyroOffset(30);
-    mpu.setYGyroOffset(155);
-    mpu.setZGyroOffset(-15);
+    mpu.setXAccelOffset(-3291);
+    mpu.setYAccelOffset(455);
+    mpu.setZAccelOffset(1329);
+    mpu.setXGyroOffset(35);
+    mpu.setYGyroOffset(159);
+    mpu.setZGyroOffset(-13);
 
     // BLE 3
     // mpu.setXAccelOffset(785);
@@ -254,12 +254,15 @@ void (* resetBeetle) (void) = 0;
 // * |_____/|______|_| \_|_____/  |_|     \____/|_| \_|\_____|
 //
 
-// * Total 2 bytes currently
-void sendACKPacket(char packetType) {
+// * Total 6 bytes currently
+void sendACKPacket() {
 
     // One byte packet type and add to CRC
     Serial.write(ACK_PACKET);
     crc.add(ACK_PACKET);
+
+    // 4 bytes timestamp data
+    writeLongToSerial(currentTime);
 
     Serial.write(crc.getCRC()); // One byte checksum
 
@@ -383,7 +386,7 @@ void loop() {
                 // Handshake starts from laptop. Reply handshake with ACK
                 handshakeStart = true;
                 handshakeEnd = false;
-                sendACKPacket(ACK_PACKET);
+                sendACKPacket();
                 Serial.flush();
                 break;
             case ACK_PACKET:

@@ -121,12 +121,13 @@ class Delegate(DefaultDelegate):
                 parsed_packet_data = struct.unpack(
                     '!chhhhhhcLc', data_packet_data)
 
-                if not self.checkCRC(18):
+                if not self.checkCRC(19 - 1):
                     logging.info(
                         "#DEBUG#: CRC Checksum doesn't match for %s. Resetting..." % self.mac_addr)
-                    BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
-                    self.buffer = b''
-                    return
+                    self.buffer = self.buffer[20:]
+                    BEETLE_CORRUPTION_NUM[self.mac_addr] += 1
+                    # BEETLE_REQUEST_RESET_STATUS[self.mac_addr] = True
+                    # return
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
                 # laptop_client.send_data(reformatted_data)
@@ -163,8 +164,9 @@ class Delegate(DefaultDelegate):
 
         # Received ACK packet
         elif (self.buffer[0] == 65):
-            # 'A', CRC8
-            self.buffer = self.buffer[2:]
+            # 'A', Timestamp, CRC8
+            parsed_packet_data = struct.unpack('!cLc', self.buffer[0:6])
+            self.buffer = self.buffer[6:]
             BEETLE_HANDSHAKE_STATUS[self.mac_addr] = True
             logging.info('#DEBUG#: Received ACK packet from %s' %
                          self.mac_addr)
@@ -185,7 +187,8 @@ class Delegate(DefaultDelegate):
         if (parsed_data[0] == b'D'):
             # Add start of dance + Timestamp
             reformatted_data = packet_start + "|".join(map(str, parsed_data[1 : -3]))
-            reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(parsed_data[8]) + "|"
+            current_epoch_timestamp = time()
+            reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(current_epoch_timestamp) + "|"
 
             # TODO append to CSV for data training
             if (str(parsed_data[7], 'UTF-8') == "S"):
@@ -206,11 +209,20 @@ class BeetleThread():
 
         self.beetle_periobj = beetle_peripheral_object
         self.dancer_id = dancer_id
-        self.serial_service = self.beetle_periobj.getServiceByUUID(
-            BLE_SERVICE_UUID)
-        self.serial_characteristic = self.serial_service.getCharacteristics()[
-            0]
-        self.start_handshake()
+
+        try:
+            self.serial_service = self.beetle_periobj.getServiceByUUID(
+                BLE_SERVICE_UUID)
+            self.serial_characteristic = self.serial_service.getCharacteristics()[
+                0]
+            self.start_handshake()
+        except:
+            sleep(5)
+            self.serial_service = self.beetle_periobj.getServiceByUUID(
+                BLE_SERVICE_UUID)
+            self.serial_characteristic = self.serial_service.getCharacteristics()[
+                0]
+            self.start_handshake()
 
     # * Initiate the start of handshake sequence with Beetle
     def start_handshake(self):
@@ -223,7 +235,7 @@ class BeetleThread():
             while not BEETLE_HANDSHAKE_STATUS[self.beetle_periobj.addr]:
                 # May throw BTLEException
                 self.serial_characteristic.write(
-                    bytes(HELLO, 'utf-8'), withResponse=True)
+                    bytes(HELLO, 'utf-8'), withResponse=False)
                 logging.info("%s H packets sent to Beetle %s" %
                              (counter, self.beetle_periobj.addr))
                 counter += 1
@@ -236,7 +248,7 @@ class BeetleThread():
                     self.reset()
 
                 # True if received packet from Beetle. Return ACK
-                if self.beetle_periobj.waitForNotifications(4):
+                if self.beetle_periobj.waitForNotifications(3):
                     # logging.info("Successful connection with %s" %
                     #       self.beetle_periobj.addr)
                     # May throw BTLEEXcpetion
@@ -334,5 +346,4 @@ if __name__ == '__main__':
             BeetleThread(beetle, dancer_id).run()
     except KeyboardInterrupt: 
         df = pd.DataFrame(List_Of_Data)
-        df.to_csv('dab.csv')
-
+        df.to_csv('jerry_mermaid.csv')
