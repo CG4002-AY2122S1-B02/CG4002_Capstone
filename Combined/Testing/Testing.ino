@@ -6,7 +6,7 @@
 
 #define NUM_SAMPLES 10
 #define START_DANCE_THRESHOLD 500
-#define POS_MOVE_THRESHOLD 90
+#define POS_MOVE_THRESHOLD 120
 #define STOP_MOVE_THRESHOLD 70
 
 MPU6050 mpu;
@@ -38,6 +38,8 @@ bool firstWindowDone = false;
 bool detectedDanceMovement = false;
 bool detectedPosMovement = false;
 int32_t lastDetectedMoveTime;
+int32_t posStartTime;
+bool positionDetected = false;
 
 double windowDiffMin = 1e9, windowDiffMax = -1e9;
 int32_t minTime, maxTime;
@@ -50,7 +52,7 @@ int16_t rotX;
 int16_t rotY;
 int16_t rotZ;
 
-float prevZ;
+int16_t prevZ;
 int left = 0;
 int right = 0;
 
@@ -93,6 +95,18 @@ void getAccValues() {
     rotY = (int) (ypr[1] * 10000);
     rotZ = (int) (ypr[2] * 10000);
 
+//    Serial.print(gyroX);
+//    Serial.print(" ");
+//    Serial.print(gyroY);
+//    Serial.print(" ");
+//    Serial.println(gyroZ);
+
+//    Serial.println(rotX);
+//    Serial.print(" ");
+//    Serial.print(rotY);
+//    Serial.print(" ");
+//    Serial.println(rotZ);
+
     //    Serial.print("with gravity: ");
     //    Serial.print(aa.x);
     //    Serial.print(" ");
@@ -132,12 +146,12 @@ void calibrateMPUOffset() {
 //    mpu.setZGyroOffset(29);
 
     // BLE 2
-//        mpu.setXAccelOffset(-3553);
-//        mpu.setYAccelOffset(599);
-//        mpu.setZAccelOffset(1346);
-//        mpu.setXGyroOffset(34);
-//        mpu.setYGyroOffset(161);
-//        mpu.setZGyroOffset(-12);
+    mpu.setXAccelOffset(-3553);
+    mpu.setYAccelOffset(599);
+    mpu.setZAccelOffset(1346);
+    mpu.setXGyroOffset(34);
+    mpu.setYGyroOffset(161);
+    mpu.setZGyroOffset(-12);
 
     // BLE 3
 //        mpu.setXAccelOffset(579);
@@ -146,14 +160,6 @@ void calibrateMPUOffset() {
 //        mpu.setXGyroOffset(18);
 //        mpu.setYGyroOffset(-43);
 //        mpu.setZGyroOffset(-80);
-
-// extra beetle for jerry
-    mpu.setXAccelOffset(1154);
-    mpu.setYAccelOffset(-767);
-    mpu.setZAccelOffset(966);
-    mpu.setXGyroOffset(46);
-    mpu.setYGyroOffset(72);
-    mpu.setZGyroOffset(17);
 
 }
 
@@ -184,19 +190,19 @@ void detectStartMove() {
             double windowDiffX = currWindowAvgX - prevWindowAvgX;
             double windowDiffY = currWindowAvgY - prevWindowAvgY;
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
-           Serial.print(windowDiffX);
-           Serial.print(" ");
-           Serial.print(windowDiffY);
-           Serial.print(" ");
-           Serial.println(windowDiffZ);
+        //    Serial.print(windowDiffX);
+        //    Serial.print(" ");
+        //    Serial.print(windowDiffY);
+        //    Serial.print(" ");
+        //    Serial.println(windowDiffZ);
 
             if (!detectedDanceMovement && (abs(windowDiffX) > START_DANCE_THRESHOLD || abs(windowDiffY) > START_DANCE_THRESHOLD || abs(windowDiffZ) > START_DANCE_THRESHOLD)) {
                 detectedDanceMovement = true;
                 lastDetectedMoveTime = micros();
             }
-            else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 200 && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
+            else if (!detectedDanceMovement && !detectedPosMovement && ((abs(windowDiffX) < 120 && abs(windowDiffY) < 220 && abs(windowDiffZ) > 120))){
                 detectedPosMovement = true;
-                lastDetectedMoveTime = micros();
+                posStartTime = millis();
 
                 prevZ = accelZ;
             }
@@ -204,17 +210,20 @@ void detectStartMove() {
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
             // for about 1.5 seconds, then we will deem it that the user has stopped moving
             if (detectedDanceMovement) {
-               Serial.println("dance in progress...");
+                Serial.println("dance in progress...");
+                positionDetected = false;
                 detectedPosMovement = false;
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
                 else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
             }
             else if (detectedPosMovement)
             {
+                if (positionDetected) return;
                 Serial.println("STARTING POSITION DETECTION");
                 Serial.print(left);
                 Serial.print(' ');
                 Serial.println(right);
+                
                 if (accelZ < prevZ && right == 0) {
                     left++;
                 }
@@ -222,20 +231,31 @@ void detectStartMove() {
                     right++;
                 }
                 else {
-                    right = 0;
                     left = 0;
-                }
-                prevZ = accelZ;
-                if (left >= 5) {
-                    Serial.println("DETECTED LEFT");
-                    detectedPosMovement = false;
-                    delay(1500);
+                    right = 0;
+                    if (millis() - posStartTime > 1500) {
+                        detectedPosMovement = false;
+                    }
                 }
 
-                else if (right >= 5) {
-                    Serial.println("DETECTED RIGHT");
+                prevZ = accelZ;
+
+                if (left >= 6) {
+                    left = 0;
+                    right = 0;
+                    Serial.println("##### DETECTED LEFT #####");
                     detectedPosMovement = false;
-                    delay(1500);
+                    positionDetected = true;
+                    delay(3000);
+                }
+
+                else if (right >= 6) {
+                    left = 0;
+                    right = 0;
+                    Serial.println("##### DETECTED RIGHT #####");
+                    detectedPosMovement = false;
+                    positionDetected = true;
+                    delay(3000);
                 }
             }
         }
