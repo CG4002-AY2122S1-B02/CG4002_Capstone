@@ -265,6 +265,18 @@ void detectStartMoveOrPosition() {
         prevWindowAvgZ = currWindowAvgZ;
         prevWindowAvgRotX = currWindowAvgRotX;
         firstWindowDone = true;
+        
+        // if position detected, then restart window
+        if(positionDetected) {
+            prevWindowAvgX = 50;
+            prevWindowAvgY = 50;
+            prevWindowAvgZ = 50;
+            
+            curr_frame = 0;
+            fullWindow = false;
+            firstWindowDone = false;
+            positionDetected = false;
+        }
     }
 }
 
