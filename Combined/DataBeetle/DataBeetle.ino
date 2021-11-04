@@ -126,12 +126,12 @@ void calibrateMPUOffset() {
     // mpu.setZGyroOffset(29);
 
     // BLE 2
-       mpu.setXAccelOffset(-3291);
-       mpu.setYAccelOffset(455);
-       mpu.setZAccelOffset(1329);
-       mpu.setXGyroOffset(35);
-       mpu.setYGyroOffset(159);
-       mpu.setZGyroOffset(-13);
+//       mpu.setXAccelOffset(-3291);
+//       mpu.setYAccelOffset(455);
+//       mpu.setZAccelOffset(1329);
+//       mpu.setXGyroOffset(35);
+//       mpu.setYGyroOffset(159);
+//       mpu.setZGyroOffset(-13);
 
     // BLE 3
 //         mpu.setXAccelOffset(785);
