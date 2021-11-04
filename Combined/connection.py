@@ -269,7 +269,7 @@ class BeetleThread():
                 self.serial_characteristic = self.serial_service.getCharacteristics()[0]
                 self.done_init = True
             except:
-                sleep(5)
+                sleep(2)
 
         self.start_handshake()
 
@@ -410,7 +410,7 @@ if __name__ == '__main__':
                 beetle.withDelegate(Delegate(mac, dancer_id))
                 connection_done = True
             except:
-                sleep(10)
+                sleep(2)
 
         BeetleThread(beetle, dancer_id).run()
 
