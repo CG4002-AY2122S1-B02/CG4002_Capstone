@@ -72,6 +72,7 @@ laptop_client = Laptop_client
 start = 0
 
 List_Of_Data = []
+Trial_Num = 0
 
 # %%
 
@@ -80,7 +81,6 @@ class Delegate(DefaultDelegate):
 
     def __init__(self, mac_addr, dancer_id):
         DefaultDelegate.__init__(self)
-        self.Trial_Num = 0
         self.mac_addr = mac_addr
         self.dancer_id = dancer_id
         self.buffer = b''
@@ -149,11 +149,11 @@ class Delegate(DefaultDelegate):
                 # todo sync_clock
                 # TODO change timestamp packet every 30 seconds? 1 min?
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
-                logging.info(reformatted_data)
+                # logging.info(reformatted_data)
                 self.buffer = self.buffer[20:]
 
-                logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
-                logging.info("Okay stats for %s: %s" % (self.mac_addr, BEETLE_OKAY_NUM[self.mac_addr]))
+                # logging.info("Corruption stats for %s: %s" % (self.mac_addr, BEETLE_CORRUPTION_NUM[self.mac_addr]))
+                # logging.info("Okay stats for %s: %s" % (self.mac_addr, BEETLE_OKAY_NUM[self.mac_addr]))
 
             # Corrupted buffer. Move forward by one byte at a time
             else:
@@ -181,6 +181,8 @@ class Delegate(DefaultDelegate):
         return calcChecksum == self.buffer[length]
 
     def formatDataForUltra96(self, parsed_data):
+        global Trial_Num
+
         BEETLE_OKAY_NUM[self.mac_addr] += 1
         packet_start = "#" + str(parsed_data[0], 'UTF-8') + "|" + str(self.dancer_id) + "|"
 
@@ -192,8 +194,8 @@ class Delegate(DefaultDelegate):
 
             # TODO append to CSV for data training
             if (str(parsed_data[7], 'UTF-8') == "S"):
-                self.Trial_Num += 1
-            dataList = [self.Trial_Num] + list(parsed_data[1: -3])
+                Trial_Num += 1
+            dataList = [Trial_Num] + list(parsed_data[1: -3])
             List_Of_Data.append(dataList)
 
             print("#DEBUG#: Formatted packet: " + ' '.join(map(str, dataList)))
@@ -342,4 +344,3 @@ if __name__ == '__main__':
             BeetleThread(beetle, dancer_id).run()
     except KeyboardInterrupt:
         df = pd.DataFrame(List_Of_Data)
-        df.to_csv('jerry_mermaid.csv')
