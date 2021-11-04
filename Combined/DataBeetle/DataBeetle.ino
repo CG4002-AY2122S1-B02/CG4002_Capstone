@@ -7,8 +7,9 @@
 // * Constants
 #define NUM_SAMPLES 10
 #define START_MOVE_THRESHOLD 500
-#define POS_MOVE_THRESHOLD 90
+#define POS_MOVE_THRESHOLD 120
 #define STOP_MOVE_THRESHOLD 70
+#define POS_DETECTION_THRESHOLD 180
 
 #define BAUD_RATE 115200
 #define SAMPLING_PERIOD 40 // 40ms, so 25Hz
@@ -52,17 +53,21 @@ float ypr[3];                   // [yaw, pitch, roll]   yaw/pitch/roll container
 int16_t AccX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in X axis. Acts like a window
 int16_t AccY[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Y axis. Acts like a window
 int16_t AccZ[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Z axis. Acts like a window
+int16_t RotX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent yaw values. Acts like a window
 int curr_frame = 0;             // Used to indicate which frame of the window we are going to be placing the values in
 bool fullWindow = false;
 double prevWindowAvgX = 0;
 double prevWindowAvgY = 0;
 double prevWindowAvgZ = 0;
+double prevWindowAvgRotX = 0;
 
 bool firstWindowDone = false;
 bool detectedDanceMovement = false;
 bool detectedPosMovement = false;
 bool firstDancePacket = false;
 int32_t lastDetectedMoveTime;
+int32_t posStartTime;
+bool positionDetected = false;
 
 double windowDiffMin = 1e9, windowDiffMax = -1e9;
 int32_t minTime, maxTime;
@@ -74,6 +79,10 @@ int16_t accelZ;
 int16_t rotX;
 int16_t rotY;
 int16_t rotZ;
+
+float prevZ;
+int left = 0;
+int right = 0;
 
 // * Buffer related
 byte twoByteBuf[2];
@@ -103,20 +112,20 @@ void checkFIFO() {
 // * Function to calibrate MPU offset
 void calibrateMPUOffset() {
     // BLE 1
-    mpu.setXAccelOffset(271);
-    mpu.setYAccelOffset(1047);
-    mpu.setZAccelOffset(1071);
-    mpu.setXGyroOffset(50);
-    mpu.setYGyroOffset(54);
-    mpu.setZGyroOffset(29);
+    // mpu.setXAccelOffset(271);
+    // mpu.setYAccelOffset(1047);
+    // mpu.setZAccelOffset(1071);
+    // mpu.setXGyroOffset(50);
+    // mpu.setYGyroOffset(54);
+    // mpu.setZGyroOffset(29);
 
     // BLE 2
-//        mpu.setXAccelOffset(-3114);
-//        mpu.setYAccelOffset(745);
-//        mpu.setZAccelOffset(1368);
-//        mpu.setXGyroOffset(32);
-//        mpu.setYGyroOffset(158);
-//        mpu.setZGyroOffset(-14);
+       mpu.setXAccelOffset(-3291);
+       mpu.setYAccelOffset(455);
+       mpu.setZAccelOffset(1329);
+       mpu.setXGyroOffset(35);
+       mpu.setYGyroOffset(159);
+       mpu.setZGyroOffset(-13);
 
     // BLE 3
 //         mpu.setXAccelOffset(785);
@@ -153,6 +162,7 @@ void getAccValues() {
     rotX = (int) (ypr[0] * 10000);
     rotY = (int) (ypr[1] * 10000);
     rotZ = (int) (ypr[2] * 10000);
+    RotX[curr_frame] = rotX;
 
     // Replace the oldest value with the newest value in the next loop
     curr_frame = (curr_frame + 1) % 10;
@@ -168,31 +178,34 @@ void detectStartMoveOrPosition() {
         double totalAccX = 0;
         double totalAccY = 0;
         double totalAccZ = 0;
+        double totalRotX = 0;
         for (int i = 0; i < NUM_SAMPLES; i++) {
             totalAccX += AccX[i];
             totalAccY += AccY[i];
             totalAccZ += AccZ[i];
+            totalRotX += RotX[i];
         }
 
         double currWindowAvgX = totalAccX / (double)NUM_SAMPLES;
         double currWindowAvgY = totalAccY / (double)NUM_SAMPLES;
         double currWindowAvgZ = totalAccZ / (double)NUM_SAMPLES;
+        double currWindowAvgRotX = totalRotX / (double)NUM_SAMPLES;
 
         // only need to calculate difference between previous and current window average after we have taken the first window
         if (firstWindowDone) {
             double windowDiffX = currWindowAvgX - prevWindowAvgX;
             double windowDiffY = currWindowAvgY - prevWindowAvgY;
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
+            double windowDiffRotX = currWindowAvgRotX - prevWindowAvgRotX;
 
-            // ? Maybe add separate logic for positional move threshold
             if (!detectedDanceMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
                 firstDancePacket = true;
                 detectedDanceMovement = true;
                 lastDetectedMoveTime = micros();
             }
-            else if (!detectedDanceMovement && !detectedPosMovement && (abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 200 && abs(windowDiffZ) > POS_MOVE_THRESHOLD)){
+            else if (!detectedDanceMovement && !detectedPosMovement && ((abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 220 && abs(windowDiffZ) > POS_MOVE_THRESHOLD) || (abs(windowDiffRotX > POS_DETECTION_THRESHOLD)))){
                 detectedPosMovement = true;
-                lastDetectedMoveTime = micros();
+                posStartTime = millis();
             }
 
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
@@ -204,31 +217,38 @@ void detectStartMoveOrPosition() {
             }
             else if (detectedPosMovement)
             {
-                if (windowDiffZ < windowDiffMin)
-                {
-                    windowDiffMin = windowDiffZ;
-                    minTime = millis();
-                }
-                if (windowDiffZ > windowDiffMax)
-                {
-                    windowDiffMax = windowDiffZ;
-                    maxTime = millis();
-                }
-                
+                if (positionDetected) return;
 
-                if (abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
-                else if (micros() - lastDetectedMoveTime > 1000000)
-                {
-                    if (maxTime > minTime)
-                        sendPosPacket(1);
-                    else
-                        sendPosPacket(0);
+                if ((windowDiffRotX < -150) && right == 0) {
+                    left++;
+                }
+                else if ((windowDiffRotX > 150) && left == 0) {
+                    right++;
+                }
+                else {
+                    left = 0;
+                    right = 0;
+                    if (millis() - posStartTime > 2500) {
+                        detectedPosMovement = false;
+                    }
+                }
 
-                    windowDiffMin = 1e9;
-                    windowDiffMax = -1e9;
-                    maxTime = millis();
-                    minTime = millis();
+                if (left >= 4) {
+                    left = 0;
+                    right = 0;
+                    sendPosPacket(1);
                     detectedPosMovement = false;
+                    positionDetected = true;
+                    delay(3000);
+                }
+
+                else if (right >= 4) {
+                    left = 0;
+                    right = 0;
+                    sendPosPacket(0);
+                    detectedPosMovement = false;
+                    positionDetected = true;
+                    delay(3000);
                 }
             }
         }
@@ -237,6 +257,7 @@ void detectStartMoveOrPosition() {
         prevWindowAvgX = currWindowAvgX;
         prevWindowAvgY = currWindowAvgY;
         prevWindowAvgZ = currWindowAvgZ;
+        prevWindowAvgRotX = currWindowAvgRotX;
         firstWindowDone = true;
     }
 }
