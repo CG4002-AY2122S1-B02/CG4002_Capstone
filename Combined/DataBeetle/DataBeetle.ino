@@ -103,11 +103,11 @@ void checkFIFO() {
 // * Function to calibrate MPU offset
 void calibrateMPUOffset() {
     // BLE 1
-    mpu.setXAccelOffset(271);
-    mpu.setYAccelOffset(1047);
-    mpu.setZAccelOffset(1071);
-    mpu.setXGyroOffset(50);
-    mpu.setYGyroOffset(54);
+    mpu.setXAccelOffset(530);
+    mpu.setYAccelOffset(349);
+    mpu.setZAccelOffset(1204);
+    mpu.setXGyroOffset(18);
+    mpu.setYGyroOffset(8);
     mpu.setZGyroOffset(29);
 
     // BLE 2
