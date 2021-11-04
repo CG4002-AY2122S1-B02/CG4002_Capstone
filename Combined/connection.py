@@ -403,13 +403,14 @@ if __name__ == '__main__':
         else:
             mac = BEETLE_DANCER_ID[dancer_id]
 
-        try:
-            beetle = Peripheral(mac)
-            beetle.withDelegate(Delegate(mac, dancer_id))
-        except:
-            sleep(10)
-            beetle = Peripheral(mac)
-            beetle.withDelegate(Delegate(mac, dancer_id))
+        connection_done = False
+        while (not connection_done):
+            try:
+                beetle = Peripheral(mac)
+                beetle.withDelegate(Delegate(mac, dancer_id))
+                connection_done = True
+            except:
+                sleep(10)
 
         BeetleThread(beetle, dancer_id).run()
 
