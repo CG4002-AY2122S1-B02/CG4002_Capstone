@@ -206,23 +206,19 @@ class Delegate(DefaultDelegate):
 
 class BeetleThread():
     def __init__(self, beetle_peripheral_object, dancer_id):
-
         self.beetle_periobj = beetle_peripheral_object
         self.dancer_id = dancer_id
+        self.done_init = False
 
-        try:
-            self.serial_service = self.beetle_periobj.getServiceByUUID(
-                BLE_SERVICE_UUID)
-            self.serial_characteristic = self.serial_service.getCharacteristics()[
-                0]
-            self.start_handshake()
-        except:
-            sleep(5)
-            self.serial_service = self.beetle_periobj.getServiceByUUID(
-                BLE_SERVICE_UUID)
-            self.serial_characteristic = self.serial_service.getCharacteristics()[
-                0]
-            self.start_handshake()
+        while (not self.done_init):
+            try:
+                self.serial_service = self.beetle_periobj.getServiceByUUID(BLE_SERVICE_UUID)
+                self.serial_characteristic = self.serial_service.getCharacteristics()[0]
+                self.done_init = True
+            except:
+                sleep(5)
+
+        self.start_handshake()
 
     # * Initiate the start of handshake sequence with Beetle
     def start_handshake(self):
@@ -344,6 +340,6 @@ if __name__ == '__main__':
                 beetle.withDelegate(Delegate(mac, dancer_id))
 
             BeetleThread(beetle, dancer_id).run()
-    except KeyboardInterrupt: 
+    except KeyboardInterrupt:
         df = pd.DataFrame(List_Of_Data)
         df.to_csv('jerry_mermaid.csv')
