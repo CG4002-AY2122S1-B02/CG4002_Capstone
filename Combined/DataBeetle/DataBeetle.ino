@@ -112,12 +112,12 @@ void checkFIFO() {
 // * Function to calibrate MPU offset
 void calibrateMPUOffset() {
     // BLE 1D
-    mpu.setXAccelOffset(530);
-    mpu.setYAccelOffset(349);
-    mpu.setZAccelOffset(1204);
-    mpu.setXGyroOffset(18);
-    mpu.setYGyroOffset(8);
-    mpu.setZGyroOffset(29);
+    // mpu.setXAccelOffset(530);
+    // mpu.setYAccelOffset(349);
+    // mpu.setZAccelOffset(1204);
+    // mpu.setXGyroOffset(18);
+    // mpu.setYGyroOffset(8);
+    // mpu.setZGyroOffset(29);
     // mpu.setXAccelOffset(271);
     // mpu.setYAccelOffset(1047);
     // mpu.setZAccelOffset(1071);
@@ -126,12 +126,12 @@ void calibrateMPUOffset() {
     // mpu.setZGyroOffset(29);
 
     // BLE 2
-//       mpu.setXAccelOffset(-3291);
-//       mpu.setYAccelOffset(455);
-//       mpu.setZAccelOffset(1329);
-//       mpu.setXGyroOffset(35);
-//       mpu.setYGyroOffset(159);
-//       mpu.setZGyroOffset(-13);
+      mpu.setXAccelOffset(-3291);
+      mpu.setYAccelOffset(455);
+      mpu.setZAccelOffset(1329);
+      mpu.setXGyroOffset(35);
+      mpu.setYGyroOffset(159);
+      mpu.setZGyroOffset(-13);
 
     // BLE 3
 //         mpu.setXAccelOffset(785);
@@ -217,6 +217,7 @@ void detectStartMoveOrPosition() {
             // if difference between current window and previous windows has been somewhat 0 (not much movement detected)
             // for about 1.5 seconds, then we will deem it that the user has stopped moving
             if (detectedDanceMovement) {
+                positionDetected = false;
                 detectedPosMovement = false;
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
                 else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
@@ -243,7 +244,6 @@ void detectStartMoveOrPosition() {
                     left = 0;
                     right = 0;
                     sendPosPacket(1);
-                    detectedPosMovement = false;
                     positionDetected = true;
                     delay(3000);
                 }
@@ -252,7 +252,6 @@ void detectStartMoveOrPosition() {
                     left = 0;
                     right = 0;
                     sendPosPacket(0);
-                    detectedPosMovement = false;
                     positionDetected = true;
                     delay(3000);
                 }
@@ -267,7 +266,7 @@ void detectStartMoveOrPosition() {
         firstWindowDone = true;
         
         // if position detected, then restart window
-        if(positionDetected) {
+        if(positionDetected && detectedPosMovement) {
             prevWindowAvgX = 50;
             prevWindowAvgY = 50;
             prevWindowAvgZ = 50;
@@ -275,7 +274,8 @@ void detectStartMoveOrPosition() {
             curr_frame = 0;
             fullWindow = false;
             firstWindowDone = false;
-            positionDetected = false;
+            detectedPosMovement = false;
+            // positionDetected = false;
         }
     }
 }
