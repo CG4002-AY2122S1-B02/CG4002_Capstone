@@ -65,24 +65,26 @@ void sendACKPacket() {
     crc.restart(); // Restart crc caclulation
 }
 
-// * Total 6 bytes + 14 bytes padding
-// * MeanAbsValue (2 bytes) and RootMeanSqValue (2 bytes)
+// * Total 8 bytes + 12 bytes padding
+// * MeanAbsValue (2 bytes) and RootMeanSqValue (2 bytes) and MedianFreq (2 bytes)
 void sendEMGPacket() {
     int convertedMeanAbsValue = (int) (MeanAbsValue);
     int convertedRootMeanSqValue = (int) (RootMeanSqValue);
+    int convertedMedianFreq = (int) (MedianFreq);
 
     // One byte packet type and add to CRC
     Serial.write(EMG_PACKET);
     crc.add(EMG_PACKET);
 
-    // 4 bytes EMG data
+    // 6 bytes EMG data
     writeIntToSerial(convertedMeanAbsValue);
     writeIntToSerial(convertedRootMeanSqValue);
+    writeIntToSerial(convertedMedianFreq);
 
     Serial.write(crc.getCRC()); // One byte checksum
 
     // Padding
-    padPacket(14);
+    padPacket(12);
 
     crc.restart();
 
@@ -156,6 +158,7 @@ void calculateFFT() {
     double medianFreq = totalPSD / 2.0;
     // scale the median frequency down
     medianFreq = medianFreq /= 1000000.0;
+    MedianFreq = medianFreq;
 }
 
 // * Calculate CRC8 for checksum

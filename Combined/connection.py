@@ -28,7 +28,7 @@ BLE_SERVICE_UUID = "0000dfb0-0000-1000-8000-00805f9b34fb"
 BLE_CHARACTERISTIC_UUID = "0000dfb1-0000-1000-8000-00805f9b34fb"
 ACK_PACKET_SIZE = 6
 BLE_PACKET_SIZE = 20
-EMG_PACKET_SIZE = 6
+EMG_PACKET_SIZE = 8
 DATA_PACKET_SIZE = 19
 TIMESTAMP_PACKET_SIZE = 6
 POSITION_PACKET_SIZE = 11
@@ -114,7 +114,7 @@ class Delegate(DefaultDelegate):
             if (self.buffer[0] == ord(EMG) and len(self.buffer) >= BLE_PACKET_SIZE):  # * ASCII Code E (EMG)
                 emg_packet_data = raw_packet_data[0: EMG_PACKET_SIZE]
                 parsed_packet_data = struct.unpack(
-                    '!chhc', emg_packet_data)
+                    '!chhhc', emg_packet_data)
 
                 if not self.checkCRC(EMG_PACKET_SIZE - 1):
                     logging.info(
@@ -240,9 +240,26 @@ class Delegate(DefaultDelegate):
             # Left packet
             if LEFT_POS in parsed_data[1:10]:
                 reformatted_data = packet_start + "L|"
+                print("""\
+                     _
+                    | |
+                    | |
+                    | |
+                    | |____
+                    |______|
+                """)
+
             # Right packet
             elif RIGHT_POS in parsed_data[1:10]:
                 reformatted_data = packet_start + "R|"
+                print("""\
+                      _____
+                     |  __ |
+                     | |__) |
+                     |  _  /
+                     | | \ |
+                     |_|  \_|
+                """)
 
         elif (parsed_data[0] == EMG):
             # converted_values = list(map(lambda i : i // 100, parsed_data[1:-1]))
