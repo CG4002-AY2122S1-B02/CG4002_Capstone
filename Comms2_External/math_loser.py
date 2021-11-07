@@ -11,6 +11,11 @@ def math_loser(input_data, model_path):
 
     # check the type of the input tensor
     floating_model = input_details[0]['dtype'] == np.float32
+    
+    data_shape = input_data.shape
+    print(f"the input data is a {len(data_shape)}d array")
+    input_std = (input_data - input_data.min(axis=0)) / (input_data.max(axis=0) - input_data.min(axis=0))
+    input_data = input_std * 2 - 1
 
     # NxHxWxC, H:1, W:2
     height = input_details[0]['shape'][1]
