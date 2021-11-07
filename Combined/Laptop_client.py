@@ -28,9 +28,9 @@ TUNNEL_TWO_SSH_PASSWORD = "cg4002b02"
 # Initialise Socket Information
 IP_ADDR = '127.0.0.1'
 # For local testing
-PORT_NUM = 7000
+# PORT_NUM = 7000
 # For actual production
-PORT_NUMS = [8001,8002,8003]
+PORT_NUMS = [8001,8002,8003,8004]
 GROUP_ID = 2
 SECRET_KEY = 'cg40024002group2'
 
@@ -65,7 +65,7 @@ class Client(threading.Thread):
     |    LAPTOP    | <==SSH==Port 22==> |  NUS Sunfire  | <===SSH===> |    Ultra 96    |
     '''
 
-    def start_ssh_tunnel(self):
+    def start_ssh_tunnel(self, tunnel_two_port):
         # Create Tunnel One from Laptop into NUS Sunfire Server
         tunnel_one =  sshtunnel.open_tunnel(
            (TUNNEL_ONE_SSH_ADDR,22), # Remote Server IP
@@ -79,7 +79,7 @@ class Client(threading.Thread):
         # Create Tunnel Two from Sunfire Server to Ultra96 Server
         tunnel_two = sshtunnel.open_tunnel(
             ssh_address_or_host=('127.0.0.1',tunnel_one.local_bind_port),
-            remote_bind_address=('127.0.0.1',PORT_NUM), # Local bind port for Sunfire (8000)
+            remote_bind_address=('127.0.0.1', tunnel_two_port), # Local bind port for Sunfire (8000)
             ssh_username=TUNNEL_TWO_SSH_USERNAME,
             ssh_password=TUNNEL_TWO_SSH_PASSWORD,
             local_bind_address=('127.0.0.1',self.port_num) # Local bind port on Laptop [8001,8002,8003]
@@ -102,8 +102,8 @@ class Client(threading.Thread):
             except socket.timeout:
                 print('Still waiting for one of the dancers T.T !!!')
 
-    def run(self):
-        self.start_ssh_tunnel()
+    def run(self, tunnel_two_port):
+        self.start_ssh_tunnel(tunnel_two_port)
         server_address = (self.ip_addr, self.port_num) # Start on local socket [8001,8002,8003]
         print('Trying to connect to %s port %s' % server_address)
         try:
@@ -116,7 +116,7 @@ class Client(threading.Thread):
         except Exception:
             print('An error has occured when trying to connect to Ultra96 Server.')
 
-    
+
 
     '''
     Methods for Encryption and Decryption
@@ -172,7 +172,7 @@ class Client(threading.Thread):
             '|7549|-2530|-9112|240|4443|-222|',
             '|7639|-2582|-9042|224|4345|-212|']
             print(f'Data Packet Number : {self.counter}')
-            
+
             emg_data1 = '#E|1|777|777'
             emg_data2 = '#E|1|888|888'
 
@@ -182,7 +182,7 @@ class Client(threading.Thread):
             else:
                 raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + random.choice(random_data) + 'N|' + str(timestamp)
 
-            if self.counter % 20 == 0:    
+            if self.counter % 20 == 0:
                 self.send_data(emg_data1)
             elif self.counter % 30 == 0:
                 self.send_data(emg_data2)
@@ -194,7 +194,7 @@ class Client(threading.Thread):
                 time.sleep(30)
                 self.send_start_flag = True
 
-            else: 
+            else:
                 self.send_start_flag = False
             self.counter = self.counter + 1
             print(f'Sending Raw Data to Ultra96 Server : {raw_data}')
@@ -275,13 +275,13 @@ class Client(threading.Thread):
     def stop(self):
         self.socket.close()
 
-def main():
-    if len(sys.argv) != 2:
-        print('Invalid number of arguments')
-        print('python Laptop_client.py [dancer_id]')
-        sys.exit()
+def main(dancer_id, tunnel_two_port):
+    # if len(sys.argv) != 2:
+    #     print('Invalid number of arguments')
+    #     print('python Laptop_client.py [dancer_id]')
+    #     sys.exit()
 
-    dancer_id = int(sys.argv[1])
+    dancer_id = int(dancer_id)
     ip_addr = '127.0.0.1'
     port_num = PORT_NUMS[dancer_id-1]
     #port_num = 7000
@@ -289,12 +289,9 @@ def main():
     secret_key = SECRET_KEY
 
     my_client = Client(dancer_id, ip_addr, port_num, group_id, secret_key)
-    my_client.run()
+    my_client.run(tunnel_two_port)
 
     my_client.wait_for_start()
     #my_client.manage_bluno_data()
     #my_client.receive_alerts()
-
-
-if __name__ == '__main__':
-    main()
+    return my_client
