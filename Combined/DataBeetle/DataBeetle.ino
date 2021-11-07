@@ -6,7 +6,7 @@
 
 // * Constants
 #define NUM_SAMPLES 10
-#define START_MOVE_THRESHOLD 500
+#define START_MOVE_THRESHOLD 400
 #define POS_MOVE_THRESHOLD 120
 #define STOP_MOVE_THRESHOLD 70
 #define POS_DETECTION_THRESHOLD 180
@@ -222,7 +222,7 @@ void detectStartMoveOrPosition() {
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
                 else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
             }
-            else if (detectedPosMovement && (millis() - posStartTime > 500))
+            else if (detectedPosMovement)
             {
                 if (positionDetected) return;
 
