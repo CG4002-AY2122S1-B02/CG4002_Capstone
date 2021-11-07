@@ -35,10 +35,10 @@ POSITION_PACKET_SIZE = 11
 
 
 # * Mac Addresses of Bluno Beetles
-BEETLE_1 = 'b0:b1:13:2d:b6:22' # Sanath
+BEETLE_1 = 'b0:b1:13:2d:b6:55' # Sanath
 BEETLE_2 = 'b0:b1:13:2d:d3:58' # Joshua
 BEETLE_3 = 'b0:b1:13:2d:b4:01' # Michael
-EMG_BEETLE = '34:15:13:22:a1:23' # FOR EMG
+EMG_BEETLE = 'b0:b1:13:2d:d4:ca' # FOR EMG
 
 
 # * Handshake status of Beetles
