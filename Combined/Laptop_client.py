@@ -7,6 +7,7 @@ import socket
 import time
 import base64
 import random
+import threading
 
 from Crypto import Random
 from Crypto.Cipher import AES
@@ -27,9 +28,9 @@ TUNNEL_TWO_SSH_PASSWORD = "cg4002b02"
 # Initialise Socket Information
 IP_ADDR = '127.0.0.1'
 # For local testing
-# PORT_NUM = 7000
+PORT_NUM = 7000
 # For actual production
-PORT_NUMS = [8001,8002,8003,8004]
+PORT_NUMS = [8001,8002,8003]
 GROUP_ID = 2
 SECRET_KEY = 'cg40024002group2'
 
@@ -38,7 +39,8 @@ BLOCK_SIZE = 16
 PADDING = ' '
 FORMAT = "utf8"
 
-class Client():
+# Allow the client socket to run on its own Thread
+class Client(threading.Thread):
     def __init__(self, dancer_id, ip_addr, port_num, group_id, secret_key):
         super(Client, self).__init__()
 
@@ -52,8 +54,9 @@ class Client():
         self.send_start_flag = True
         self.counter = 0
 
-        self.start_time_sync = False
+        self.start_time_sync = True
         self.start_evaluation = False
+        self.lock = threading.Lock()
 
     '''
     Create a "Double-Hop" SSH Tunnel for Dancer's Laptops to Reach Ultra96 Server
@@ -62,7 +65,7 @@ class Client():
     |    LAPTOP    | <==SSH==Port 22==> |  NUS Sunfire  | <===SSH===> |    Ultra 96    |
     '''
 
-    def start_ssh_tunnel(self, tunnel_two_port):
+    def start_ssh_tunnel(self):
         # Create Tunnel One from Laptop into NUS Sunfire Server
         tunnel_one =  sshtunnel.open_tunnel(
            (TUNNEL_ONE_SSH_ADDR,22), # Remote Server IP
@@ -76,7 +79,7 @@ class Client():
         # Create Tunnel Two from Sunfire Server to Ultra96 Server
         tunnel_two = sshtunnel.open_tunnel(
             ssh_address_or_host=('127.0.0.1',tunnel_one.local_bind_port),
-            remote_bind_address=('127.0.0.1', tunnel_two_port), # Local bind port for Sunfire (8000)
+            remote_bind_address=('127.0.0.1',PORT_NUM), # Local bind port for Sunfire (8000)
             ssh_username=TUNNEL_TWO_SSH_USERNAME,
             ssh_password=TUNNEL_TWO_SSH_PASSWORD,
             local_bind_address=('127.0.0.1',self.port_num) # Local bind port on Laptop [8001,8002,8003]
@@ -99,16 +102,21 @@ class Client():
             except socket.timeout:
                 print('Still waiting for one of the dancers T.T !!!')
 
-    def run(self, tunnel_two_port):
-        self.start_ssh_tunnel(tunnel_two_port)
+    def run(self):
+        self.start_ssh_tunnel()
         server_address = (self.ip_addr, self.port_num) # Start on local socket [8001,8002,8003]
         print('Trying to connect to %s port %s' % server_address)
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect(server_address)
             print("Successfully connected to the Ultra96 server")
+            alerts_thread = threading.Thread(target=self.receive_alerts)
+            alerts_thread.daemon = True
+            alerts_thread.start()
         except Exception:
             print('An error has occured when trying to connect to Ultra96 Server.')
+
+    
 
     '''
     Methods for Encryption and Decryption
@@ -157,16 +165,16 @@ class Client():
                 print('Waiting 3s for all dancers to run Time Sync Protocol!')
 
             # Simulate retrieve and send data to Ultra96 Server
-            #raw_data = '#D|' + str(self.dancer_id) + '|Ax|Ay|Az|Rx|Ry|Rz'
-
             timestamp = time.time()
             random_data = ['|7639|-2580|-9132|206|4429|-205|',
             '|7553|-2567|-9092|216|4532|-237|',
             '|7643|-2534|-9042|234|4302|-192|',
             '|7549|-2530|-9112|240|4443|-222|',
             '|7639|-2582|-9042|224|4345|-212|']
-
             print(f'Data Packet Number : {self.counter}')
+            
+            emg_data1 = '#E|1|777|777'
+            emg_data2 = '#E|1|888|888'
 
             if self.send_start_flag:
                 print(f'Sending Start of dance flag for Dancer {self.dancer_id}')
@@ -174,22 +182,43 @@ class Client():
             else:
                 raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + random.choice(random_data) + 'N|' + str(timestamp)
 
-            #emg_data = '#E|' + str(self.dancer_id) + '|emg's
-            #emg_data = '#E|' + str(self.dancer_id) + '|225'
+            if self.counter % 20 == 0:    
+                self.send_data(emg_data1)
+            elif self.counter % 30 == 0:
+                self.send_data(emg_data2)
+
+            #self.receive_alerts()
+
             self.send_data(raw_data)
-            if self.counter % 120 == 0 and self.counter != 0:
-                time.sleep(180)
+            if self.counter % 100 == 0 and self.counter != 0:
+                time.sleep(30)
                 self.send_start_flag = True
-            else:
+
+            else: 
                 self.send_start_flag = False
             self.counter = self.counter + 1
             print(f'Sending Raw Data to Ultra96 Server : {raw_data}')
             time.sleep(0.1)
 
-
     def send_data(self, data):
         encrypted_message = self.encrypt_message(data)
         self.socket.sendall(encrypted_message)
+
+    '''
+    Function that listens constantly to eval server to receive alerts
+    '''
+    def receive_alerts(self):
+        while self.start_evaluation:
+            data = self.socket.recv(1024)
+            print(data)
+            print('Debug')
+            try:
+                alert = self.decrypt_message(data)
+                alert_msg = alert.split('|')[0]
+                print(alert_msg)
+            except Exception:
+                print('Did not receive alert from Ultra96 Server!')
+
 
     '''
     Functions to call to initiate Time Sync Protocol that calculates RRT and Offset
@@ -246,22 +275,26 @@ class Client():
     def stop(self):
         self.socket.close()
 
-def main(dancer_id, tunnel_two_port):
-    # if len(sys.argv) != 2:
-    #     print('Invalid number of arguments')
-    #     print('python Laptop_client.py [dancer_id]')
-    #     sys.exit()
+def main():
+    if len(sys.argv) != 2:
+        print('Invalid number of arguments')
+        print('python Laptop_client.py [dancer_id]')
+        sys.exit()
 
-    dancer_id = int(dancer_id)
+    dancer_id = int(sys.argv[1])
     ip_addr = '127.0.0.1'
     port_num = PORT_NUMS[dancer_id-1]
-    # port_num = 8000
+    #port_num = 7000
     group_id = GROUP_ID
     secret_key = SECRET_KEY
 
     my_client = Client(dancer_id, ip_addr, port_num, group_id, secret_key)
-    my_client.run(tunnel_two_port)
+    my_client.run()
+
     my_client.wait_for_start()
+    #my_client.manage_bluno_data()
+    #my_client.receive_alerts()
 
-    return my_client
 
+if __name__ == '__main__':
+    main()
