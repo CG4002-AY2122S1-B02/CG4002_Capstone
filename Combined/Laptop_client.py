@@ -210,14 +210,15 @@ class Client(threading.Thread):
     def receive_alerts(self):
         while self.start_evaluation:
             data = self.socket.recv(1024)
-            print(data)
-            print('Debug')
             try:
-                alert = self.decrypt_message(data)
-                alert_msg = alert.split('|')[0]
-                print(alert_msg)
+                if data:
+                    alert = self.decrypt_message(data)
+                    alert_msg = alert.split('|')[0]
+                    print(alert_msg)
+                else:
+                    pass
             except Exception:
-                print('Did not receive alert from Ultra96 Server!')
+                pass
 
 
     '''
