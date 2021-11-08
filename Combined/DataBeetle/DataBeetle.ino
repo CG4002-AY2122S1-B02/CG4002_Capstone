@@ -23,6 +23,7 @@
 #define POS_PACKET 'P'
 #define START_DANCE_PACKET 'S'
 #define NORMAL_DANCE_PACKET 'N'
+#define END_DANCE_PACKET 'E'
 #define TIMESTAMP 'T'
 
 // * Time related global variables
@@ -220,7 +221,10 @@ void detectStartMoveOrPosition() {
                 positionDetected = false;
                 detectedPosMovement = false;
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
-                else if (micros() - lastDetectedMoveTime > 1500000) detectedDanceMovement = false;
+                else if (micros() - lastDetectedMoveTime > 1500000) {
+                    detectedDanceMovement = false;
+                    sendEndOfDancePacket();
+                }
             }
             else if (detectedPosMovement)
             {
@@ -264,13 +268,13 @@ void detectStartMoveOrPosition() {
         prevWindowAvgZ = currWindowAvgZ;
         prevWindowAvgRotX = currWindowAvgRotX;
         firstWindowDone = true;
-        
+
         // if position detected, then restart window
         if(positionDetected && detectedPosMovement) {
             prevWindowAvgX = 50;
             prevWindowAvgY = 50;
             prevWindowAvgZ = 50;
-            
+
             curr_frame = 0;
             fullWindow = false;
             firstWindowDone = false;
@@ -399,6 +403,35 @@ void sendDataPacket() {
         Serial.write(NORMAL_DANCE_PACKET);
         crc.add(NORMAL_DANCE_PACKET);
     }
+
+    // 4 bytes timestamp data
+    writeLongToSerial(currentTime);
+
+    Serial.write(crc.getCRC()); // One byte checksum
+
+    padPacket(1);
+
+    crc.restart();
+}
+
+// * Total 19 bytes currently + 1 byte paddings
+void sendEndOfDancePacket() {
+
+    // One byte packet type and add to CRC
+    Serial.write(DATA_PACKET);
+    crc.add(DATA_PACKET);
+
+    // 6 bytes accelerometer, 6 bytes rotational (YPR)
+    writeIntToSerial(accelX);
+    writeIntToSerial(accelY);
+    writeIntToSerial(accelZ);
+    writeIntToSerial(rotX);
+    writeIntToSerial(rotY);
+    writeIntToSerial(rotZ);
+
+    // 1 byte for end of dance packet
+    Serial.write(END_DANCE_PACKET);
+    crc.add(END_DANCE_PACKET);
 
     // 4 bytes timestamp data
     writeLongToSerial(currentTime);
