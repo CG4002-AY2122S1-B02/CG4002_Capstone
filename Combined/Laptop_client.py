@@ -64,7 +64,7 @@ class Client(threading.Thread):
     |    LAPTOP    | <==SSH==Port 22==> |  NUS Sunfire  | <===SSH===> |    Ultra 96    |
     '''
 
-    def start_ssh_tunnel(self, tunnel_two_port):
+    def start_ssh_tunnel(self, tunnel_two_port, port_num):
         # Create Tunnel One from Laptop into NUS Sunfire Server
         tunnel_one =  sshtunnel.open_tunnel(
            (TUNNEL_ONE_SSH_ADDR,22), # Remote Server IP
@@ -81,7 +81,7 @@ class Client(threading.Thread):
             remote_bind_address=('127.0.0.1', tunnel_two_port), # Local bind port for Sunfire (8000)
             ssh_username=TUNNEL_TWO_SSH_USERNAME,
             ssh_password=TUNNEL_TWO_SSH_PASSWORD,
-            local_bind_address=('127.0.0.1',self.port_num) # Local bind port on Laptop [8001,8002,8003]
+            local_bind_address=('127.0.0.1',port_num) # Local bind port on Laptop [8001,8002,8003]
         )
         tunnel_two.start()
         print('Connection to tunnel_two (137.132.86.225:8000) OK...')
@@ -102,7 +102,7 @@ class Client(threading.Thread):
                 print('Still waiting for one of the dancers T.T !!!')
 
     def run(self, tunnel_two_port):
-        self.start_ssh_tunnel(tunnel_two_port)
+        self.start_ssh_tunnel(tunnel_two_port, self.port_num)
         server_address = (self.ip_addr, self.port_num) # Start on local socket [8001,8002,8003]
         print('Trying to connect to %s port %s' % server_address)
         try:
@@ -113,7 +113,7 @@ class Client(threading.Thread):
         except Exception:
             print('An error has occured when trying to connect to Ultra96 Server.')
 
-        self.start_ssh_tunnel(self.port_num + 4)
+        self.start_ssh_tunnel(tunnel_two_port, self.port_num + 4)
         alert_address = (self.ip_addr, self.port_num + 4) # Start on local socket [8005,8006,8007]
         print('Trying to connect to %s port %s' % alert_address)
         try:
