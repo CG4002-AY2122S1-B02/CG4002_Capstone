@@ -119,7 +119,7 @@ class Client(threading.Thread):
         try:
             self.alert_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.alert_socket.connect(alert_address)
-            print(f'Successfully connected alert channel on port {self.port_num + 4}')
+            print("Successfully connected alert channel on port {}".format(self.port_num + 4))
         except Exception:
             print('An error has occured when trying to connect to Ultra96 Server.')
 
@@ -200,13 +200,13 @@ class Client(threading.Thread):
             '|7643|-2534|-9042|234|4302|-192|',
             '|7549|-2530|-9112|240|4443|-222|',
             '|7639|-2582|-9042|224|4345|-212|']
-            print(f'Data Packet Number : {self.counter}')
+            print("Data Packet Number : {}".format(self.counter))
 
             emg_data1 = '#E|1|777|777'
             emg_data2 = '#E|1|888|888'
 
             if self.send_start_flag:
-                print(f'Sending Start of dance flag for Dancer {self.dancer_id}')
+                print("Sending Start of dance flag for Dancer {}".format(self.dancer_id))
                 raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + random.choice(random_data) + 'S|' + str(timestamp)
             else:
                 raw_data = '#' + 'D' + '|' + str(self.dancer_id).strip() + random.choice(random_data) + 'N|' + str(timestamp)
@@ -224,7 +224,7 @@ class Client(threading.Thread):
             else:
                 self.send_start_flag = False
             self.counter = self.counter + 1
-            print(f'Sending Raw Data to Ultra96 Server : {raw_data}')
+            print("Sending Raw Data to Ultra96 Server : {}".format(raw_data))
             time.sleep(0.1)
 
     def send_data(self, data):
