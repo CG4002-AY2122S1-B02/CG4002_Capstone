@@ -27,8 +27,7 @@ TUNNEL_TWO_SSH_PASSWORD = "cg4002b02"
 
 # Initialise Socket Information
 IP_ADDR = '127.0.0.1'
-# For local testing
-# PORT_NUM = 7000
+
 # For actual production
 PORT_NUMS = [8001,8002,8003,8004]
 GROUP_ID = 2
@@ -110,13 +109,43 @@ class Client(threading.Thread):
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect(server_address)
             print("Successfully connected to the Ultra96 server")
-            alerts_thread = threading.Thread(target=self.receive_alerts)
-            alerts_thread.daemon = True
-            alerts_thread.start()
+
         except Exception:
             print('An error has occured when trying to connect to Ultra96 Server.')
 
+        self.start_ssh_tunnel(self.port_num + 4)
+        alert_address = (self.ip_addr, self.port_num + 4) # Start on local socket [8005,8006,8007]
+        print('Trying to connect to %s port %s' % alert_address)
+        try:
+            self.alert_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.alert_socket.connect(alert_address)
+            print(f'Successfully connected alert channel on port {self.port_num + 4}')
+        except Exception:
+            print('An error has occured when trying to connect to Ultra96 Server.')
 
+        # Create a seperate thread to handle this socket for alerts
+        self.alerts_thread = threading.Thread(target=self.receive_alerts)
+        self.alerts_thread.daemon = True
+        self.alerts_thread.start()
+
+    '''
+    Function that listens constantly to eval server to receive alerts
+    '''
+    def receive_alerts(self):
+        while True:
+            try:
+                data = self.alert_socket.recv(1024)
+                if data:    
+                    #alert_msg = data.decode(FORMAT)
+                    print(' ')
+                    print(' ____   _____   ___   ____    ____      _     _   _   ____  ___  _   _   ____   _ ')
+                    print('/ ___| |_   _| / _ \ |  _ \  |  _ \    / \   | \ | | / ___||_ _|| \ | | / ___| | |')
+                    print('\___ \   | |  | | | || |_) | | | | |  / _ \  |  \| || |     | | |  \| || |  _  | |')
+                    print(' ___) |  | |  | |_| ||  __/  | |_| | / ___ \ | |\  || |___  | | | |\  || |_| | |_|')
+                    print('|____/   |_|   \___/ |_|     |____/ /_/   \_\|_| \_| \____||___||_| \_| \____| (_)')
+                    print(' ')
+            except socket.timeout or BlockingIOError:
+                pass
 
     '''
     Methods for Encryption and Decryption
@@ -187,8 +216,6 @@ class Client(threading.Thread):
             elif self.counter % 30 == 0:
                 self.send_data(emg_data2)
 
-            #self.receive_alerts()
-
             self.send_data(raw_data)
             if self.counter % 100 == 0 and self.counter != 0:
                 time.sleep(30)
@@ -203,23 +230,6 @@ class Client(threading.Thread):
     def send_data(self, data):
         encrypted_message = self.encrypt_message(data)
         self.socket.sendall(encrypted_message)
-
-    '''
-    Function that listens constantly to eval server to receive alerts
-    '''
-    def receive_alerts(self):
-        while self.start_evaluation:
-            data = self.socket.recv(1024)
-            try:
-                if data:
-                    alert = self.decrypt_message(data)
-                    alert_msg = alert.split('|')[0]
-                    print(alert_msg)
-                else:
-                    pass
-            except Exception:
-                pass
-
 
     '''
     Functions to call to initiate Time Sync Protocol that calculates RRT and Offset
@@ -285,7 +295,6 @@ def main(dancer_id, tunnel_two_port):
     dancer_id = int(dancer_id)
     ip_addr = '127.0.0.1'
     port_num = PORT_NUMS[dancer_id-1]
-    #port_num = 7000
     group_id = GROUP_ID
     secret_key = SECRET_KEY
 
@@ -294,5 +303,5 @@ def main(dancer_id, tunnel_two_port):
 
     my_client.wait_for_start()
     #my_client.manage_bluno_data()
-    #my_client.receive_alerts()
+
     return my_client
