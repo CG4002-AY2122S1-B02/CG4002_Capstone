@@ -113,20 +113,20 @@ class Client(threading.Thread):
         except Exception:
             print('An error has occured when trying to connect to Ultra96 Server.')
 
-        self.start_ssh_tunnel(tunnel_two_port, self.port_num + 4)
-        alert_address = (self.ip_addr, self.port_num + 4) # Start on local socket [8005,8006,8007]
-        print('Trying to connect to %s port %s' % alert_address)
-        try:
-            self.alert_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self.alert_socket.connect(alert_address)
-            print("Successfully connected alert channel on port {}".format(self.port_num + 4))
-        except Exception:
-            print('An error has occured when trying to connect to Ultra96 Server.')
+        # self.start_ssh_tunnel(tunnel_two_port, self.port_num + 4)
+        # alert_address = (self.ip_addr, self.port_num + 4) # Start on local socket [8005,8006,8007]
+        # print('Trying to connect to %s port %s' % alert_address)
+        # try:
+        #     self.alert_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        #     self.alert_socket.connect(alert_address)
+        #     print("Successfully connected alert channel on port {}".format(self.port_num + 4))
+        # except Exception:
+        #     print('An error has occured when trying to connect to Ultra96 Server.')
 
-        # Create a seperate thread to handle this socket for alerts
-        self.alerts_thread = threading.Thread(target=self.receive_alerts)
-        self.alerts_thread.daemon = True
-        self.alerts_thread.start()
+        # # Create a seperate thread to handle this socket for alerts
+        # self.alerts_thread = threading.Thread(target=self.receive_alerts)
+        # self.alerts_thread.daemon = True
+        # self.alerts_thread.start()
 
     '''
     Function that listens constantly to eval server to receive alerts
