@@ -6,7 +6,7 @@
 
 // * Constants
 #define NUM_SAMPLES 10
-#define START_MOVE_THRESHOLD 400
+#define START_MOVE_THRESHOLD 450
 #define POS_MOVE_THRESHOLD 120
 #define STOP_MOVE_THRESHOLD 70
 #define POS_DETECTION_THRESHOLD 180
@@ -230,10 +230,10 @@ void detectStartMoveOrPosition() {
             {
                 if (positionDetected) return;
 
-                if ((windowDiffRotX < -150) && right == 0) {
+                if ((windowDiffRotX < -140) && right == 0) {
                     left++;
                 }
-                else if ((windowDiffRotX > 150) && left == 0) {
+                else if ((windowDiffRotX > 140) && left == 0) {
                     right++;
                 }
                 else {
