@@ -205,6 +205,7 @@ void padPacket(int length) {
 // * Initialization
 void setup() {
     Serial.begin(BAUD_RATE);
+    interval_us = round(1000000 * (1.0 / SAMPLING_FREQ));
 }
 
 void loop() {
