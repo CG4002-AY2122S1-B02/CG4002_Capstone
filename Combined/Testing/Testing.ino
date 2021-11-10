@@ -29,12 +29,16 @@ int16_t AccX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent 
 int16_t AccY[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Y axis. Acts like a window
 int16_t AccZ[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Z axis. Acts like a window
 int16_t RotX[NUM_SAMPLES];
+int GyroY[NUM_SAMPLES];
+
 int curr_frame = 0;             // Used to indicate which frame of the window we are going to be placing the values in
 bool fullWindow = false;
 double prevWindowAvgX = 0;
 double prevWindowAvgY = 0;
 double prevWindowAvgZ = 0;
 double prevWindowAvgRotX = 0;
+double prevWindowAvgGyroY = 0;
+
 
 bool firstWindowDone = false;
 bool detectedDanceMovement = false;
@@ -54,6 +58,8 @@ int16_t accelZ;
 int16_t rotX;
 int16_t rotY;
 int16_t rotZ;
+int gyroX, gyroY, gyroZ;
+
 
 // int16_t prevZ;
 int left = 0;
@@ -85,6 +91,7 @@ void getAccValues() {
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+    mpu.getRotation(&gyroX, &gyroY, &gyroZ);
 
     AccX[curr_frame] = aaReal.x;
     AccY[curr_frame] = aaReal.y;
@@ -98,6 +105,7 @@ void getAccValues() {
     rotY = (int) (ypr[1] * 10000);
     rotZ = (int) (ypr[2] * 10000);
     RotX[curr_frame] = rotX;
+    GyroY[curr_frame] = gyroX;
 
 //    Serial.print(gyroX);
 //    Serial.print(" ");
@@ -180,17 +188,20 @@ void detectStartMove() {
         double totalAccY = 0;
         double totalAccZ = 0;
         double totalRotX = 0;
+        double totalGyroY = 0;
         for (int i = 0; i < NUM_SAMPLES; i++) {
             totalAccX += AccX[i];
             totalAccY += AccY[i];
             totalAccZ += AccZ[i];
             totalRotX += RotX[i];
+            totalGyroY += GyroY[i];
         }
 
         double currWindowAvgX = totalAccX / (double)NUM_SAMPLES;
         double currWindowAvgY = totalAccY / (double)NUM_SAMPLES;
         double currWindowAvgZ = totalAccZ / (double)NUM_SAMPLES;
         double currWindowAvgRotX = totalRotX / (double)NUM_SAMPLES;
+        double currWindowAvgGyroY = totalGyroY / (double)NUM_SAMPLES;
 
         // only need to calculate difference between previous and current window average after we have taken the first window
         if (firstWindowDone) {
@@ -198,18 +209,20 @@ void detectStartMove() {
             double windowDiffY = currWindowAvgY - prevWindowAvgY;
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
             double windowDiffRotX = currWindowAvgRotX - prevWindowAvgRotX;
+            double windowDiffGyroY = currWindowAvgGyroY - prevWindowAvgGyroY;
         //    Serial.print(windowDiffX);
         //    Serial.print(" ");
         //    Serial.print(windowDiffY);
         //    Serial.print(" ");
         //    Serial.println(windowDiffZ);
 //            Serial.println(windowDiffRotX);
+//            Serial.println(windowDiffGyroY);
 
             if (!detectedDanceMovement && (abs(windowDiffX) > START_DANCE_THRESHOLD || abs(windowDiffY) > START_DANCE_THRESHOLD || abs(windowDiffZ) > START_DANCE_THRESHOLD)) {
                 detectedDanceMovement = true;
                 lastDetectedMoveTime = micros();
             }
-            else if (!detectedDanceMovement && !detectedPosMovement && ((abs(windowDiffX) < 120 && abs(windowDiffY) < 220 && abs(windowDiffZ) > 120) || (abs(windowDiffRotX > 180)))){
+            else if (!detectedDanceMovement && !detectedPosMovement && ((abs(windowDiffX) < 120 && abs(windowDiffY) < 220 && abs(windowDiffZ) > 120) || (abs(windowDiffGyroY > 1500)))){
                 detectedPosMovement = true;
                 lastDetectedPosTime = micros();
                 posStartTime = millis();
@@ -230,14 +243,14 @@ void detectStartMove() {
             {
                 if (positionDetected) return;
                 Serial.println("STARTING POSITION DETECTION");
-                Serial.print(left);
-                Serial.print(' ');
-                Serial.println(right);
-                if ((windowDiffRotX < -150) && right == 0) {
+//                Serial.print(left);
+//                Serial.print(' ');
+//                Serial.println(right);
+                if ((windowDiffGyroY < -1600) && right == 0) {
                     left++;
                 }
-                else if ((windowDiffRotX > 150) && left == 0) {
-                    right++;
+                else if ((windowDiffGyroY > 1600) && left == 0) {
+                    right++;  
                 }
                 else {
                     left = 0;
@@ -263,7 +276,7 @@ void detectStartMove() {
 //                }
                 // prevZ = accelZ;
 
-                if (left >= 4) {
+                if (left >= 1) {
                     left = 0;
                     right = 0;
                     Serial.println("##### DETECTED LEFT #####");
@@ -272,7 +285,7 @@ void detectStartMove() {
                     delay(3000);
                 }
 
-                else if (right >= 4) {
+                else if (right >= 1) {
                     left = 0;
                     right = 0;
                     Serial.println("##### DETECTED RIGHT #####");
