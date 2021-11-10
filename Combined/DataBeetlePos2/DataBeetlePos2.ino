@@ -9,7 +9,7 @@
 #define START_MOVE_THRESHOLD 450
 #define POS_MOVE_THRESHOLD 120
 #define STOP_MOVE_THRESHOLD 70
-#define POS_DETECTION_THRESHOLD 130
+#define POS_DETECTION_THRESHOLD 1500
 
 #define BAUD_RATE 115200
 #define SAMPLING_PERIOD 40 // 40ms, so 25Hz
@@ -55,12 +55,14 @@ int16_t AccX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent 
 int16_t AccY[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Y axis. Acts like a window
 int16_t AccZ[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Z axis. Acts like a window
 int16_t RotX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent yaw values. Acts like a window
+int GyroX[NUM_SAMPLES];
 int curr_frame = 0;             // Used to indicate which frame of the window we are going to be placing the values in
 bool fullWindow = false;
 double prevWindowAvgX = 0;
 double prevWindowAvgY = 0;
 double prevWindowAvgZ = 0;
 double prevWindowAvgRotX = 0;
+double prevWindowAvgGyroX = 0;
 
 bool firstWindowDone = false;
 bool detectedDanceMovement = false;
@@ -80,6 +82,7 @@ int16_t accelZ;
 int16_t rotX;
 int16_t rotY;
 int16_t rotZ;
+int gyroX, gyroY, gyroZ;
 
 float prevZ;
 int left = 0;
@@ -157,6 +160,7 @@ void getAccValues() {
     mpu.dmpGetGravity(&gravity, &q);
     mpu.dmpGetLinearAccel(&aaReal, &aa, &gravity);
     mpu.dmpGetYawPitchRoll(ypr, &q, &gravity);
+    mpu.getRotation(&gyroX, &gyroY, &gyroZ);
 
     AccX[curr_frame] = aaReal.x;
     AccY[curr_frame] = aaReal.y;
@@ -170,6 +174,7 @@ void getAccValues() {
     rotY = (int) (ypr[1] * 10000);
     rotZ = (int) (ypr[2] * 10000);
     RotX[curr_frame] = rotX;
+    GyroX[curr_frame] = gyroX;
 
     // Replace the oldest value with the newest value in the next loop
     curr_frame = (curr_frame + 1) % 10;
@@ -186,17 +191,20 @@ void detectStartMoveOrPosition() {
         double totalAccY = 0;
         double totalAccZ = 0;
         double totalRotX = 0;
+        double totalGyroX = 0;
         for (int i = 0; i < NUM_SAMPLES; i++) {
             totalAccX += AccX[i];
             totalAccY += AccY[i];
             totalAccZ += AccZ[i];
             totalRotX += RotX[i];
+            totalGyroX += GyroX[i];
         }
 
         double currWindowAvgX = totalAccX / (double)NUM_SAMPLES;
         double currWindowAvgY = totalAccY / (double)NUM_SAMPLES;
         double currWindowAvgZ = totalAccZ / (double)NUM_SAMPLES;
         double currWindowAvgRotX = totalRotX / (double)NUM_SAMPLES;
+        double currWindowAvgGyroX = totalGyroX / (double)NUM_SAMPLES;
 
         // only need to calculate difference between previous and current window average after we have taken the first window
         if (firstWindowDone) {
@@ -204,13 +212,14 @@ void detectStartMoveOrPosition() {
             double windowDiffY = currWindowAvgY - prevWindowAvgY;
             double windowDiffZ = currWindowAvgZ - prevWindowAvgZ;
             double windowDiffRotX = currWindowAvgRotX - prevWindowAvgRotX;
+            double windowDiffGyroX = currWindowAvgGyroX - prevWindowAvgGyroX;
 
             if (!detectedDanceMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
                 firstDancePacket = true;
                 detectedDanceMovement = true;
                 lastDetectedMoveTime = micros();
             }
-            else if (!detectedDanceMovement && !detectedPosMovement && ((abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 220 && abs(windowDiffZ) > POS_MOVE_THRESHOLD) || (abs(windowDiffRotX > POS_DETECTION_THRESHOLD)))){
+            else if (!detectedDanceMovement && !detectedPosMovement && ((abs(windowDiffX) < POS_MOVE_THRESHOLD && abs(windowDiffY) < 220 && abs(windowDiffZ) > POS_MOVE_THRESHOLD) || (abs(windowDiffGyroX > POS_DETECTION_THRESHOLD)))){
                 detectedPosMovement = true;
                 posStartTime = millis();
             }
@@ -230,10 +239,10 @@ void detectStartMoveOrPosition() {
             {
                 if (positionDetected) return;
 
-                if ((windowDiffRotX < -130) && right == 0) {
+                if ((windowDiffGyroX < -1600) && right == 0) {
                     left++;
                 }
-                else if ((windowDiffRotX > 130) && left == 0) {
+                else if ((windowDiffGyroX > 1600) && left == 0) {
                     right++;
                 }
                 else {
@@ -244,7 +253,7 @@ void detectStartMoveOrPosition() {
                     }
                 }
 
-                if (left >= 4) {
+                if (left >= 1) {
                     left = 0;
                     right = 0;
                     sendPosPacket(1);
@@ -252,7 +261,7 @@ void detectStartMoveOrPosition() {
                     delay(3000);
                 }
 
-                else if (right >= 4) {
+                else if (right >= 1) {
                     left = 0;
                     right = 0;
                     sendPosPacket(0);
@@ -267,6 +276,8 @@ void detectStartMoveOrPosition() {
         prevWindowAvgY = currWindowAvgY;
         prevWindowAvgZ = currWindowAvgZ;
         prevWindowAvgRotX = currWindowAvgRotX;
+        prevWindowAvgGyroX = currWindowAvgGyroX;
+
         firstWindowDone = true;
 
         // if position detected, then restart window
