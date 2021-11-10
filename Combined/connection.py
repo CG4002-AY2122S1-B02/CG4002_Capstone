@@ -1,7 +1,7 @@
 # %%
 # * Imports and initialization
 import argparse
-from time import sleep, time
+from time import perf_counter, sleep, time
 from bluepy.btle import BTLEDisconnectError, DefaultDelegate, Peripheral
 import struct
 from crccheck.crc import Crc8
@@ -358,6 +358,12 @@ class BeetleThread():
         BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr] = False
         self.reconnect()
 
+    def reset_without_beetle(self):
+        logging.info("Resetting program for %s" % self.beetle_periobj.addr)
+        BEETLE_HANDSHAKE_STATUS[self.beetle_periobj.addr] = False
+        BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr] = False
+        self.reconnect()
+
     # * Continues watching the Beetle and check request reset flag
     # * If request reset is true, reset Beetle and reinitiate handshake
     def run(self):
@@ -369,8 +375,13 @@ class BeetleThread():
                 if BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     break
 
-                if self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
+                if self.dancer_id == 4 and self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     continue
+                elif self.beetle_periobj.waitForNotifications(15) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
+                    continue
+
+                self.reset_without_beetle()
+                self.start_handshake()
 
             self.reset()
             self.start_handshake()
@@ -416,6 +427,7 @@ if __name__ == '__main__':
     else:
         # * Change ALL_BEETLE_MAC to only include one dancer's Beetle
         if (IS_EMG_BEETLE):
+            dancer_id = 4
             mac = BEETLE_DANCER_ID['4']
         else:
             mac = BEETLE_DANCER_ID[dancer_id]
