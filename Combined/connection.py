@@ -382,13 +382,12 @@ class BeetleThread():
                 if BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     break
 
-                if self.dancer_id == 4 and self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
-                    continue
-                elif self.beetle_periobj.waitForNotifications(15) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
+                if self.beetle_periobj.waitForNotifications(4) and not BEETLE_REQUEST_RESET_STATUS[self.beetle_periobj.addr]:
                     continue
 
-                self.reset_without_beetle()
-                self.start_handshake()
+                if self.dancer_id == 4:
+                    self.reset_without_beetle()
+                    self.start_handshake()
 
             self.reset()
             self.start_handshake()
