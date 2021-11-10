@@ -68,7 +68,8 @@ double prevWindowAvgGyroX = 0;
 bool firstWindowDone = false;
 bool detectedDanceMovement = false;
 bool detectedPosMovement = false;
-bool firstDancePacket = false;
+bool startDancePacket = false;
+bool calibrationPackets = true;
 int32_t lastDetectedMoveTime;
 int32_t posStartTime;
 bool positionDetected = false;
@@ -216,7 +217,7 @@ void detectStartMoveOrPosition() {
             double windowDiffGyroX = currWindowAvgGyroX - prevWindowAvgGyroX;
 
             if (!detectedDanceMovement && (abs(windowDiffX) > START_MOVE_THRESHOLD || abs(windowDiffY) > START_MOVE_THRESHOLD || abs(windowDiffZ) > START_MOVE_THRESHOLD)) {
-                firstDancePacket = true;
+                startDancePacket = true;
                 detectedDanceMovement = true;
                 lastDetectedMoveTime = micros();
             }
@@ -232,6 +233,7 @@ void detectStartMoveOrPosition() {
                 detectedPosMovement = false;
                 if (abs(windowDiffX) > STOP_MOVE_THRESHOLD || abs(windowDiffY) > STOP_MOVE_THRESHOLD || abs(windowDiffZ) > STOP_MOVE_THRESHOLD) lastDetectedMoveTime = micros();
                 else if (micros() - lastDetectedMoveTime > 1500000) {
+                    if (calibrationPackets) calibrationPackets = false;
                     detectedDanceMovement = false;
                     sendEndOfDancePacket();
                 }
@@ -407,8 +409,8 @@ void sendDataPacket() {
     writeIntToSerial(rotZ);
 
     // 1 byte for start dance or normal dance packet
-    if (firstDancePacket) {
-        firstDancePacket = false;
+    if (startDancePacket) {
+        startDancePacket = false;
         Serial.write(START_DANCE_PACKET);
         crc.add(START_DANCE_PACKET);
     } else {
@@ -524,6 +526,7 @@ void setup() {
     currentTime = 0;
     previousPacketTime = 0;
     previousTimestampPacketTime = 0;
+    calibrationPackets = true;
 }
 
 void loop() {
@@ -563,7 +566,7 @@ void loop() {
 
         // Send sensor data
         if (currentTime - previousPacketTime > SAMPLING_PERIOD) {
-            sendDataPacket();
+            if (!calibrationPackets) sendDataPacket();
             Serial.flush();
             previousPacketTime = currentTime;
         }
