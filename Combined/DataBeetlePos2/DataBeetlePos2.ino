@@ -56,6 +56,7 @@ int16_t AccY[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent 
 int16_t AccZ[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent real acceleration values in Z axis. Acts like a window
 int16_t RotX[NUM_SAMPLES];      // Stores NUM_SAMPLES number of the most recent yaw values. Acts like a window
 int GyroX[NUM_SAMPLES];
+
 int curr_frame = 0;             // Used to indicate which frame of the window we are going to be placing the values in
 bool fullWindow = false;
 double prevWindowAvgX = 0;
@@ -276,7 +277,7 @@ void detectStartMoveOrPosition() {
         prevWindowAvgY = currWindowAvgY;
         prevWindowAvgZ = currWindowAvgZ;
         prevWindowAvgRotX = currWindowAvgRotX;
-        prevWindowAvgGyroX = currWindowAvgGyroX;
+        // prevWindowAvgGyroX = currWindowAvgGyroX;
 
         firstWindowDone = true;
 
