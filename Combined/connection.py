@@ -84,6 +84,7 @@ USE_FAKE_DATA = False
 laptop_client = Laptop_client
 IS_NOT_LOCAL_TESTING = True
 last_time_sync = 0
+RECEIVED_CALIBRATION_END_PACKET = False
 
 
 # * Delegate that is attached to each Beetle peripheral
@@ -99,6 +100,7 @@ class Delegate(DefaultDelegate):
     # * Handles incoming packets from serial comms
     def handleNotification(self, cHandle, data):
         global last_time_sync
+        global RECEIVED_CALIBRATION_END_PACKET
 
         # logging.info("#DEBUG#: Printing Raw Data here: %s. Length: %s" % (data, len(data)))
 
@@ -126,7 +128,7 @@ class Delegate(DefaultDelegate):
 
                 reformatted_data = self.formatDataForUltra96(parsed_packet_data)
 
-                if (IS_NOT_LOCAL_TESTING):
+                if (IS_NOT_LOCAL_TESTING and not RECEIVED_CALIBRATION_END_PACKET):
                     laptop_client.send_data(reformatted_data)
 
                 self.buffer = self.buffer[BLE_PACKET_SIZE:]
@@ -226,6 +228,8 @@ class Delegate(DefaultDelegate):
         return calcChecksum == self.buffer[length]
 
     def formatDataForUltra96(self, parsed_data):
+        global RECEIVED_CALIBRATION_END_PACKET
+
         BEETLE_OKAY_NUM[self.mac_addr] += 1
         packet_start = "#" + str(parsed_data[0], 'UTF-8') + "|" + str(self.dancer_id) + "|"
 
@@ -235,6 +239,9 @@ class Delegate(DefaultDelegate):
             # ! current_epoch_timestamp = self.start_of_arduino_timestamp + parsed_data[8]
             current_epoch_timestamp = time()
             reformatted_data = reformatted_data + "|" + str(parsed_data[7], 'UTF-8') + "|" + str(current_epoch_timestamp) + "|"
+
+            if (not RECEIVED_CALIBRATION_END_PACKET):
+                RECEIVED_CALIBRATION_END_PACKET = True
 
         elif (parsed_data[0] == POSITION):
             # Left packet
