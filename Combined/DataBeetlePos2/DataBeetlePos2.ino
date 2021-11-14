@@ -118,6 +118,12 @@ void checkFIFO() {
 // * Function to calibrate MPU offset
 void calibrateMPUOffset() {
     // BLE 1D
+    mpu.setXAccelOffset(-5269);
+    mpu.setYAccelOffset(-2093);
+    mpu.setZAccelOffset(1526);
+    mpu.setXGyroOffset(-104);
+    mpu.setYGyroOffset(101);
+    mpu.setZGyroOffset(-68);
     // mpu.setXAccelOffset(530);
     // mpu.setYAccelOffset(349);
     // mpu.setZAccelOffset(1204);
@@ -132,12 +138,12 @@ void calibrateMPUOffset() {
     // mpu.setZGyroOffset(29);
 
     // BLE 2
-      mpu.setXAccelOffset(-3291);
-      mpu.setYAccelOffset(455);
-      mpu.setZAccelOffset(1329);
-      mpu.setXGyroOffset(35);
-      mpu.setYGyroOffset(159);
-      mpu.setZGyroOffset(-13);
+//      mpu.setXAccelOffset(-3291);
+//      mpu.setYAccelOffset(455);
+//      mpu.setZAccelOffset(1329);
+//      mpu.setXGyroOffset(35);
+//      mpu.setYGyroOffset(159);
+//      mpu.setZGyroOffset(-13);
 
     // BLE 3
 //         mpu.setXAccelOffset(785);
