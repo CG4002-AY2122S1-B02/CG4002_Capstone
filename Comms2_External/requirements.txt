@@ -23,7 +23,7 @@ Naked==0.1.31
 ntplib==0.4.0
 numpy==1.19.2
 pandas==1.1.2
-paramiko==2.7.2
+paramiko==2.10.1
 protobuf==3.18.0
 pycparser==2.20
 pycrypt==0.7.2
