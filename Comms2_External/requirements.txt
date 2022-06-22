@@ -21,7 +21,7 @@ mccabe==0.6.1
 multidict==5.1.0
 Naked==0.1.31
 ntplib==0.4.0
-numpy==1.19.2
+numpy==1.22.0
 pandas==1.1.2
 paramiko==2.7.2
 protobuf==3.18.0
